@@ -1,0 +1,6 @@
+export const DB_URL = process.env.DATABASE_URL ?? 'postgres://bosco:bosco_dev@localhost:5432/bosco'
+export const JWT_SECRET = process.env.JWT_SECRET ?? 'change-me-in-production'
+export const PORT = Number(process.env.PORT ?? 3001)
+export const UPLOADS_DIR = process.env.UPLOADS_DIR ?? '/var/www/bosco/uploads'
+export const UPLOADS_URL = process.env.UPLOADS_URL ?? 'https://bosco.vaguespac.es/uploads'
+export const GOOGLE_FONTS_API_KEY = process.env.GOOGLE_FONTS_API_KEY ?? ''
