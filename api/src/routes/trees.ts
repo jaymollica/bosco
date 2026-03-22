@@ -1,5 +1,41 @@
 import type { FastifyPluginAsync } from 'fastify'
+import webpush from 'web-push'
 import sql from '../db/client.js'
+import { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT } from '../lib/config.js'
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
+}
+
+async function sendPublishNotification(title: string, slug: string) {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return
+  const subscriptions = await sql`SELECT endpoint, p256dh, auth FROM push_subscriptions`
+  const payload = JSON.stringify({
+    title: 'New tour published',
+    body: title,
+    url: `/t/${slug}`,
+    icon: '/pwa-icons/icon-192x192.png',
+  })
+  const stale: string[] = []
+  await Promise.allSettled(
+    subscriptions.map(async (sub: { endpoint: string; p256dh: string; auth: string }) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          payload
+        )
+      } catch (err: unknown) {
+        const status = (err as { statusCode?: number }).statusCode
+        if (status === 410 || status === 404) {
+          stale.push(sub.endpoint)
+        }
+      }
+    })
+  )
+  if (stale.length > 0) {
+    await sql`DELETE FROM push_subscriptions WHERE endpoint = ANY(${stale})`
+  }
+}
 
 // Template: Intro → 1 text step → (depth-1) text branching levels → 2^depth end steps
 // depth 2 → 4 outcomes, depth 3 → 8 outcomes, depth 4 → 16 outcomes
@@ -298,6 +334,9 @@ const treeRoutes: FastifyPluginAsync = async (fastify) => {
       WHERE id = ${id}
       RETURNING *
     `
+
+    // Fire-and-forget push notification
+    sendPublishNotification(updated.title, updated.slug).catch(err => fastify.log.error(err))
 
     return updated
   })

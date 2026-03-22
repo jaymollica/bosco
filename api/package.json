@@ -26,7 +26,8 @@
     "node-fetch": "^3.3.2",
     "postgres": "^3.4.8",
     "sharp": "^0.34.5",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

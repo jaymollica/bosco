@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import PushPrompt from './PushPrompt.js'
 
 const api = axios.create({ baseURL: '/api' })
 
@@ -198,6 +199,8 @@ export default function Home() {
           )
         })}
       </div>
+
+      <PushPrompt />
 
       {/* Dot indicators */}
       {trees.length > 1 && (

@@ -29,6 +29,19 @@ interface AnalyticsData {
   topPaths: { choice_path: string[]; count: number }[]
 }
 
+function TapIcon({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 13V4.5a1.5 1.5 0 0 1 3 0V12" />
+      <path d="M11 11.5V10a1.5 1.5 0 0 1 3 0v1.5" />
+      <path d="M14 12v-1a1.5 1.5 0 0 1 3 0v1.5" />
+      <path d="M17 12.5a1.5 1.5 0 0 1 3 0V16a6 6 0 0 1-6 6h-2a6 6 0 0 1-5.2-3l-2.5-4.3a1.5 1.5 0 0 1 2.1-2L8 13" />
+      <path d="M5 4a3 3 0 0 0-3 3" opacity="0.4" />
+      <path d="M3 1a6 6 0 0 0-3 5.2" opacity="0.25" />
+    </svg>
+  )
+}
+
 function buildFontUrl(theme: Theme): string | null {
   const families: string[] = []
   const addFont = (font?: { family: string; weight: string }) => {
@@ -52,6 +65,7 @@ export default function Player() {
   const [showResults, setShowResults] = useState(false)
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [sessionChoiceIds, setSessionChoiceIds] = useState<string[]>([])
+  const [otherTours, setOtherTours] = useState<{ id: string; title: string; slug: string; theme?: Theme; intro_content?: { title?: string; description?: string } }[]>([])
 
   // Load tree + create session
   useEffect(() => {
@@ -144,13 +158,15 @@ export default function Player() {
 
   const handleShowResults = () => {
     if (!slug || !sessionId) return
-    // Fetch analytics and session summary in parallel
+    // Fetch analytics, session summary, and other tours in parallel
     Promise.all([
       api.get<AnalyticsData>(`/t/${slug}/analytics`),
       api.get<{ choice_ids: string[] }>(`/sessions/${sessionId}/summary`),
-    ]).then(([a, s]) => {
+      api.get<{ id: string; title: string; slug: string; theme?: Theme; intro_content?: { title?: string; description?: string } }[]>('/published'),
+    ]).then(([a, s, p]) => {
       setAnalytics(a.data)
       setSessionChoiceIds(s.data.choice_ids)
+      setOtherTours(p.data.filter(t => t.slug !== slug))
     }).catch(() => {})
 
     setVisible(false)
@@ -287,6 +303,7 @@ export default function Player() {
             bodyFont={bodyFont}
             titleFont={titleFont}
             slug={slug!}
+            otherTours={otherTours}
           />
         )}
       </div>
@@ -357,8 +374,8 @@ function EndChoices({ content, onShowResults, bodyFont }: {
   )
 }
 
-/** Inline results: vertical Sankey + stats — fits in one viewport, no scroll */
-function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds, onPlayAgain, bodyFont, titleFont, slug }: {
+/** Inline results: vertical Sankey + stats — fits in one viewport, swipe for other tours */
+function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds, onPlayAgain, bodyFont, titleFont, slug, otherTours }: {
   analytics: AnalyticsData | null
   completionPct: number
   samePathPct: number
@@ -367,11 +384,11 @@ function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds
   bodyFont?: string
   titleFont?: string
   slug: string
+  otherTours: { id: string; title: string; slug: string; theme?: Theme; intro_content?: { title?: string; description?: string } }[]
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [dims, setDims] = useState({ w: 280, h: 300 })
   const [showShare, setShowShare] = useState(false)
-
   useEffect(() => {
     if (!containerRef.current) return
     const ro = new ResizeObserver(entries => {
@@ -385,91 +402,176 @@ function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds
   const shareUrl = `${window.location.origin}/t/${slug}`
 
   return (
-    <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Stats — side by side */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '3rem', padding: '2rem 1.5rem 1rem' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2.5rem', fontWeight: 300, fontFamily: titleFont, lineHeight: 1 }}>
-            {completionPct}%
-          </div>
-          <div style={{ fontSize: '0.75rem', opacity: 0.5, fontFamily: bodyFont, marginTop: '0.375rem' }}>
-            explored
-          </div>
-        </div>
-        {samePathPct > 0 && (
+    <div style={{
+      width: '100%',
+      height: '100vh',
+      display: 'flex',
+      overflowX: 'auto',
+      overflowY: 'hidden',
+      scrollSnapType: 'x mandatory',
+      WebkitOverflowScrolling: 'touch',
+      scrollbarWidth: 'none',
+    }}>
+      {/* First card: results */}
+      <div style={{
+        flex: '0 0 100%',
+        height: '100%',
+        scrollSnapAlign: 'start',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        {/* Stats — side by side */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '3rem', padding: '2rem 1.5rem 1rem' }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', fontWeight: 300, fontFamily: titleFont, lineHeight: 1 }}>
-              {samePathPct}%
+              {completionPct}%
             </div>
             <div style={{ fontSize: '0.75rem', opacity: 0.5, fontFamily: bodyFont, marginTop: '0.375rem' }}>
-              took your path
+              explored
             </div>
           </div>
+          {samePathPct > 0 && (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '2.5rem', fontWeight: 300, fontFamily: titleFont, lineHeight: 1 }}>
+                {samePathPct}%
+              </div>
+              <div style={{ fontSize: '0.75rem', opacity: 0.5, fontFamily: bodyFont, marginTop: '0.375rem' }}>
+                took your path
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Vertical Sankey — fills remaining space */}
+        <div ref={containerRef} style={{ flex: 1, minHeight: 0, padding: '0 2rem' }}>
+          {analytics && analytics.nodes.length > 0 && dims.h > 0 && (
+            <VerticalSankeyChart
+              nodes={analytics.nodes}
+              links={analytics.links}
+              highlightChoiceIds={highlightChoiceIds}
+              width={dims.w}
+              height={dims.h}
+            />
+          )}
+        </div>
+
+        {/* Bottom buttons — side by side */}
+        <div style={{ display: 'flex', flexShrink: 0, height: '15vh', padding: '0 2rem' }}>
+          <button
+            onClick={onPlayAgain}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem',
+              border: 'none',
+              background: 'transparent',
+              color: 'inherit',
+              fontSize: '1.5rem',
+              fontFamily: bodyFont,
+              fontWeight: 300,
+              letterSpacing: '0.01em',
+              cursor: 'pointer',
+              boxSizing: 'border-box',
+            }}
+          >
+            Play again
+          </button>
+          <button
+            onClick={() => setShowShare(true)}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem',
+              border: 'none',
+              background: 'rgba(0,0,0,0.03)',
+              color: 'inherit',
+              fontSize: '1.5rem',
+              fontFamily: bodyFont,
+              fontWeight: 300,
+              letterSpacing: '0.01em',
+              cursor: 'pointer',
+              boxSizing: 'border-box',
+            }}
+          >
+            Share
+          </button>
+        </div>
+
+        {showShare && (
+          <ShareModal url={shareUrl} onClose={() => setShowShare(false)} bodyFont={bodyFont} />
         )}
       </div>
 
-      {/* Vertical Sankey — fills remaining space */}
-      <div ref={containerRef} style={{ flex: 1, minHeight: 0, padding: '0 2rem' }}>
-        {analytics && analytics.nodes.length > 0 && dims.h > 0 && (
-          <VerticalSankeyChart
-            nodes={analytics.nodes}
-            links={analytics.links}
-            highlightChoiceIds={highlightChoiceIds}
-            width={dims.w}
-            height={dims.h}
-          />
-        )}
-      </div>
+      {/* Subsequent cards: other tours */}
+      {otherTours.map((tour) => {
+        const t = tour.theme ?? {}
+        const tFont = t.titleFont?.family
+        const bFont = t.bodyFont?.family
+        const tColor = t.textColor ?? '#1a1a1a'
+        let bg = '#ffffff'
+        if (t.background?.type === 'gradient' && t.background.css) bg = t.background.css
+        else if (t.background?.type === 'solid' && t.background.color) bg = t.background.color
 
-      {/* Bottom buttons — side by side */}
-      <div style={{ display: 'flex', flexShrink: 0, height: '15vh', padding: '0 2rem' }}>
-        <button
-          onClick={onPlayAgain}
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-            border: 'none',
-            background: 'transparent',
-            color: 'inherit',
-            fontSize: '1.5rem',
-            fontFamily: bodyFont,
-            fontWeight: 300,
-            letterSpacing: '0.01em',
-            cursor: 'pointer',
-            boxSizing: 'border-box',
-          }}
-        >
-          Play again
-        </button>
-        <button
-          onClick={() => setShowShare(true)}
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-            border: 'none',
-            background: 'rgba(0,0,0,0.03)',
-            color: 'inherit',
-            fontSize: '1.5rem',
-            fontFamily: bodyFont,
-            fontWeight: 300,
-            letterSpacing: '0.01em',
-            cursor: 'pointer',
-            boxSizing: 'border-box',
-          }}
-        >
-          Share
-        </button>
-      </div>
-
-      {showShare && (
-        <ShareModal url={shareUrl} onClose={() => setShowShare(false)} bodyFont={bodyFont} />
-      )}
+        return (
+          <div
+            key={tour.id}
+            onClick={() => { window.location.href = `/t/${tour.slug}` }}
+            style={{
+              flex: '0 0 100%',
+              height: '100%',
+              scrollSnapAlign: 'start',
+              display: 'flex',
+              flexDirection: 'column',
+              background: bg,
+              color: tColor,
+              cursor: 'pointer',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ padding: '3rem 1.5rem 0', textAlign: 'left' }}>
+              <h1 style={{
+                margin: '0 0 0.75rem',
+                fontFamily: tFont,
+                fontSize: '2.75rem',
+                lineHeight: 1.15,
+                fontWeight: 700,
+                color: 'inherit',
+              }}>
+                {tour.intro_content?.title || tour.title}
+              </h1>
+              {tour.intro_content?.description && (
+                <p style={{
+                  margin: 0,
+                  fontFamily: bFont,
+                  fontSize: '1rem',
+                  lineHeight: 1.6,
+                }}>
+                  {tour.intro_content.description}
+                </p>
+              )}
+            </div>
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              opacity: 0.4,
+            }}>
+              <TapIcon size={48} />
+              <span style={{ fontSize: '0.75rem', fontFamily: bFont, fontWeight: 300, letterSpacing: '0.05em' }}>
+                tap to begin
+              </span>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

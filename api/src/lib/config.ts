@@ -4,3 +4,6 @@ export const PORT = Number(process.env.PORT ?? 3001)
 export const UPLOADS_DIR = process.env.UPLOADS_DIR ?? '/var/www/bosco/uploads'
 export const UPLOADS_URL = process.env.UPLOADS_URL ?? 'https://bosco.vaguespac.es/uploads'
 export const GOOGLE_FONTS_API_KEY = process.env.GOOGLE_FONTS_API_KEY ?? ''
+export const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ?? ''
+export const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? ''
+export const VAPID_SUBJECT = process.env.VAPID_SUBJECT ?? 'mailto:admin@vaguespac.es'

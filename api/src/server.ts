@@ -8,6 +8,7 @@ import stepRoutes from './routes/steps.js'
 import uploadRoutes from './routes/uploads.js'
 import fontsRoute from './routes/fonts.js'
 import playerRoutes from './routes/player.js'
+import pushRoutes from './routes/push.js'
 import { PORT } from './lib/config.js'
 
 const fastify = Fastify({ logger: true })
@@ -32,6 +33,7 @@ await fastify.register(stepRoutes)
 await fastify.register(uploadRoutes)
 await fastify.register(fontsRoute)
 await fastify.register(playerRoutes)
+await fastify.register(pushRoutes)
 
 fastify.get('/api/health', async () => ({ ok: true }))
 
