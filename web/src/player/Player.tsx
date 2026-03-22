@@ -12,6 +12,17 @@ import type { SankeyNode, SankeyLink } from '../shared/components/SankeyChart.js
 // Unauthenticated axios instance for public player routes
 const api = axios.create({ baseURL: '/api' })
 
+function useIsDesktop() {
+  const [desktop, setDesktop] = useState(() => window.innerWidth >= 768)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const handler = (e: MediaQueryListEvent) => setDesktop(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+  return desktop
+}
+
 interface PlayerTree {
   id: string
   title: string
@@ -29,19 +40,6 @@ interface AnalyticsData {
   topPaths: { choice_path: string[]; count: number }[]
 }
 
-function TapIcon({ size = 32 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 13V4.5a1.5 1.5 0 0 1 3 0V12" />
-      <path d="M11 11.5V10a1.5 1.5 0 0 1 3 0v1.5" />
-      <path d="M14 12v-1a1.5 1.5 0 0 1 3 0v1.5" />
-      <path d="M17 12.5a1.5 1.5 0 0 1 3 0V16a6 6 0 0 1-6 6h-2a6 6 0 0 1-5.2-3l-2.5-4.3a1.5 1.5 0 0 1 2.1-2L8 13" />
-      <path d="M5 4a3 3 0 0 0-3 3" opacity="0.4" />
-      <path d="M3 1a6 6 0 0 0-3 5.2" opacity="0.25" />
-    </svg>
-  )
-}
-
 function buildFontUrl(theme: Theme): string | null {
   const families: string[] = []
   const addFont = (font?: { family: string; weight: string }) => {
@@ -55,6 +53,7 @@ function buildFontUrl(theme: Theme): string | null {
 
 export default function Player() {
   const { slug } = useParams<{ slug: string }>()
+  const isDesktop = useIsDesktop()
   const [tree, setTree] = useState<PlayerTree | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -65,8 +64,7 @@ export default function Player() {
   const [showResults, setShowResults] = useState(false)
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [sessionChoiceIds, setSessionChoiceIds] = useState<string[]>([])
-  const [otherTours, setOtherTours] = useState<{ id: string; title: string; slug: string; theme?: Theme; intro_content?: { title?: string; description?: string } }[]>([])
-
+  const [otherTours, setOtherTours] = useState<{ id: string; title: string; slug: string; theme?: Theme; intro_content?: { title?: string; description?: string; hero_image_url?: string } }[]>([])
   // Load tree + create session
   useEffect(() => {
     if (!slug) return
@@ -232,6 +230,98 @@ export default function Player() {
 
   const highlightSet = new Set(sessionChoiceIds)
 
+  const playerContent = (
+    <div
+      key={showResults ? 'results' : currentStepId}
+      style={{
+        width: '100%',
+        maxWidth: isDesktop ? undefined : '540px',
+        height: '100%',
+        opacity: visible ? 1 : 0,
+        transition: 'opacity 0.4s ease',
+        boxSizing: 'border-box',
+      }}
+    >
+      {!showResults && currentStep.type === 'intro' && (
+        <IntroStep
+          content={currentStep.content as IntroContent}
+          choices={stepChoices}
+          onChoose={navigate}
+          {...stepProps}
+        />
+      )}
+      {!showResults && currentStep.type === 'text' && (
+        <TextStep
+          content={currentStep.content as TextContent}
+          choices={stepChoices}
+          onChoose={navigate}
+          {...stepProps}
+        />
+      )}
+      {!showResults && currentStep.type === 'image' && (
+        <ImageStep
+          content={currentStep.content as ImageContent}
+          choices={stepChoices}
+          onChoose={navigate}
+          {...stepProps}
+        />
+      )}
+      {!showResults && currentStep.type === 'end' && stepChoices.length > 0 && (
+        <div style={{ width: '100%' }}>
+          <ChoiceList choices={stepChoices} onChoose={navigate} bodyFont={bodyFont} />
+        </div>
+      )}
+      {!showResults && stepChoices.length === 0 && (
+        <EndChoices
+          content={currentStep.type === 'end' ? currentStep.content as EndContent : undefined}
+          onShowResults={handleShowResults}
+          bodyFont={bodyFont}
+        />
+      )}
+      {showResults && (
+        <ResultsView
+          analytics={analytics}
+          completionPct={completionPct}
+          samePathPct={samePathPct}
+          highlightChoiceIds={highlightSet}
+          onPlayAgain={handlePlayAgain}
+          bodyFont={bodyFont}
+          titleFont={titleFont}
+          slug={slug!}
+          otherTours={otherTours}
+        />
+      )}
+    </div>
+  )
+
+  if (isDesktop) {
+    return (
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        background: '#111',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <div style={{
+          width: '374px',
+          height: '85vh',
+          maxHeight: '720px',
+          borderRadius: '1.25rem',
+          overflow: 'hidden',
+          background,
+          color: textColor,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}>
+          {playerContent}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -247,66 +337,7 @@ export default function Player() {
         inset: 0,
       }}
     >
-      <div
-        key={showResults ? 'results' : currentStepId}
-        style={{
-          width: '100%',
-          maxWidth: '540px',
-          opacity: visible ? 1 : 0,
-          transition: 'opacity 0.4s ease',
-          boxSizing: 'border-box',
-        }}
-      >
-        {!showResults && currentStep.type === 'intro' && (
-          <IntroStep
-            content={currentStep.content as IntroContent}
-            choices={stepChoices}
-            onChoose={navigate}
-            {...stepProps}
-          />
-        )}
-        {!showResults && currentStep.type === 'text' && (
-          <TextStep
-            content={currentStep.content as TextContent}
-            choices={stepChoices}
-            onChoose={navigate}
-            {...stepProps}
-          />
-        )}
-        {!showResults && currentStep.type === 'image' && (
-          <ImageStep
-            content={currentStep.content as ImageContent}
-            choices={stepChoices}
-            onChoose={navigate}
-            {...stepProps}
-          />
-        )}
-        {!showResults && currentStep.type === 'end' && stepChoices.length > 0 && (
-          <div style={{ width: '100%' }}>
-            <ChoiceList choices={stepChoices} onChoose={navigate} bodyFont={bodyFont} />
-          </div>
-        )}
-        {!showResults && stepChoices.length === 0 && (
-          <EndChoices
-            content={currentStep.type === 'end' ? currentStep.content as EndContent : undefined}
-            onShowResults={handleShowResults}
-            bodyFont={bodyFont}
-          />
-        )}
-        {showResults && (
-          <ResultsView
-            analytics={analytics}
-            completionPct={completionPct}
-            samePathPct={samePathPct}
-            highlightChoiceIds={highlightSet}
-            onPlayAgain={handlePlayAgain}
-            bodyFont={bodyFont}
-            titleFont={titleFont}
-            slug={slug!}
-            otherTours={otherTours}
-          />
-        )}
-      </div>
+      {playerContent}
     </div>
   )
 }
@@ -328,7 +359,7 @@ function EndChoices({ content, onShowResults, bodyFont }: {
     setTimeout(onShowResults, 500)
   }
 
-  const tile = (action: string, label: string, i: number) => {
+  const tile = (action: string, label: string) => {
     const isChosen = chosen === action
     return (
       <button
@@ -339,15 +370,11 @@ function EndChoices({ content, onShowResults, bodyFont }: {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          height: '50vh',
+          height: '50%',
           width: '100%',
           padding: '2rem',
           border: 'none',
-          background: isChosen
-            ? 'rgba(0,0,0,0.06)'
-            : i % 2 === 1
-              ? 'rgba(0,0,0,0.03)'
-              : 'transparent',
+          background: 'transparent',
           color: 'inherit',
           fontSize: '1.75rem',
           fontFamily: bodyFont,
@@ -367,9 +394,9 @@ function EndChoices({ content, onShowResults, bodyFont }: {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-      {tile('a', label1, 0)}
-      {tile('b', label2, 1)}
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
+      {tile('a', label1)}
+      {tile('b', label2)}
     </div>
   )
 }
@@ -384,7 +411,7 @@ function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds
   bodyFont?: string
   titleFont?: string
   slug: string
-  otherTours: { id: string; title: string; slug: string; theme?: Theme; intro_content?: { title?: string; description?: string } }[]
+  otherTours: { id: string; title: string; slug: string; theme?: Theme; intro_content?: { title?: string; description?: string; hero_image_url?: string } }[]
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [dims, setDims] = useState({ w: 280, h: 300 })
@@ -404,7 +431,7 @@ function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds
   return (
     <div style={{
       width: '100%',
-      height: '100vh',
+      height: '100%',
       display: 'flex',
       overflowX: 'auto',
       overflowY: 'hidden',
@@ -457,7 +484,7 @@ function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds
         </div>
 
         {/* Bottom buttons — side by side */}
-        <div style={{ display: 'flex', flexShrink: 0, height: '15vh', padding: '0 2rem' }}>
+        <div style={{ display: 'flex', flexShrink: 0, padding: '1rem 2rem 2.5rem' }}>
           <button
             onClick={onPlayAgain}
             style={{
@@ -488,7 +515,7 @@ function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds
               justifyContent: 'center',
               padding: '1rem',
               border: 'none',
-              background: 'rgba(0,0,0,0.03)',
+              background: 'transparent',
               color: 'inherit',
               fontSize: '1.5rem',
               fontFamily: bodyFont,
@@ -511,11 +538,12 @@ function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds
       {otherTours.map((tour) => {
         const t = tour.theme ?? {}
         const tFont = t.titleFont?.family
-        const bFont = t.bodyFont?.family
         const tColor = t.textColor ?? '#1a1a1a'
         let bg = '#ffffff'
         if (t.background?.type === 'gradient' && t.background.css) bg = t.background.css
         else if (t.background?.type === 'solid' && t.background.color) bg = t.background.color
+        const hasImage = !!tour.intro_content?.hero_image_url
+        const cardTextColor = hasImage ? '#fff' : tColor
 
         return (
           <div
@@ -528,14 +556,35 @@ function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds
               display: 'flex',
               flexDirection: 'column',
               background: bg,
-              color: tColor,
+              color: cardTextColor,
               cursor: 'pointer',
               overflow: 'hidden',
+              position: 'relative',
             }}
           >
-            <div style={{ padding: '3rem 1.5rem 0', textAlign: 'left' }}>
+            {hasImage && (
+              <>
+                <img
+                  src={tour.intro_content!.hero_image_url!}
+                  alt=""
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                />
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 40%, rgba(0,0,0,0.05) 100%)',
+                }} />
+              </>
+            )}
+            <div style={{ position: 'relative', padding: '3rem 1.5rem 0', textAlign: 'left' }}>
               <h1 style={{
-                margin: '0 0 0.75rem',
+                margin: 0,
                 fontFamily: tFont,
                 fontSize: '2.75rem',
                 lineHeight: 1.15,
@@ -544,31 +593,8 @@ function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds
               }}>
                 {tour.intro_content?.title || tour.title}
               </h1>
-              {tour.intro_content?.description && (
-                <p style={{
-                  margin: 0,
-                  fontFamily: bFont,
-                  fontSize: '1rem',
-                  lineHeight: 1.6,
-                }}>
-                  {tour.intro_content.description}
-                </p>
-              )}
             </div>
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              opacity: 0.4,
-            }}>
-              <TapIcon size={48} />
-              <span style={{ fontSize: '0.75rem', fontFamily: bFont, fontWeight: 300, letterSpacing: '0.05em' }}>
-                tap to begin
-              </span>
-            </div>
+            <div style={{ flex: 1 }} />
           </div>
         )
       })}

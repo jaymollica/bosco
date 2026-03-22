@@ -31,12 +31,24 @@ function buildFontUrl(trees: PublishedTree[]): string | null {
   return `https://fonts.googleapis.com/css2?${[...families].map(f => `family=${f.replace(/ /g, '+')}`).join('&')}&display=swap`
 }
 
+function useIsDesktop() {
+  const [desktop, setDesktop] = useState(() => window.innerWidth >= 768)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const handler = (e: MediaQueryListEvent) => setDesktop(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+  return desktop
+}
+
 export default function Home() {
   const [trees, setTrees] = useState<PublishedTree[]>([])
   const [loading, setLoading] = useState(true)
   const [activeIndex, setActiveIndex] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const isDesktop = useIsDesktop()
 
   useEffect(() => {
     api.get<PublishedTree[]>('/published')
@@ -64,8 +76,9 @@ export default function Home() {
     const el = scrollRef.current
     if (!el) return
     const handleScroll = () => {
-      const cardWidth = el.offsetWidth
-      const index = Math.round(el.scrollLeft / cardWidth)
+      const firstChild = el.firstElementChild as HTMLElement | null
+      const snapWidth = firstChild?.offsetWidth || el.offsetWidth
+      const index = Math.round(el.scrollLeft / snapWidth)
       setActiveIndex(index)
     }
     el.addEventListener('scroll', handleScroll, { passive: true })
@@ -104,19 +117,65 @@ export default function Home() {
         style={{
           flex: 1,
           display: 'flex',
+          alignItems: isDesktop ? 'center' : undefined,
           overflowX: 'auto',
           scrollSnapType: 'x mandatory',
           WebkitOverflowScrolling: 'touch',
           scrollbarWidth: 'none',
+          gap: isDesktop ? '1.5rem' : 0,
+          padding: isDesktop ? '0 calc(50% - 187px)' : 0,
         }}
       >
+        {/* Bosco intro card */}
+        <div style={{
+          flex: isDesktop ? '0 0 374px' : '0 0 100%',
+          height: isDesktop ? '85%' : '100%',
+          maxHeight: isDesktop ? '720px' : undefined,
+          scrollSnapAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#111',
+          color: '#fff',
+          borderRadius: isDesktop ? '1.25rem' : 0,
+          gap: '2rem',
+        }}>
+          <h1 style={{
+            margin: 0,
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: isDesktop ? '2.5rem' : '3rem',
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            color: 'inherit',
+          }}>
+            bosco
+          </h1>
+          <p style={{
+            margin: '0 2rem',
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '0.95rem',
+            fontWeight: 300,
+            color: '#fff',
+            letterSpacing: '0.01em',
+            textAlign: 'center',
+          }}>
+            Choose your own adventure, one tap at a time.
+          </p>
+          <svg width={isDesktop ? 80 : 96} height={isDesktop ? 80 : 96} viewBox="0 0 48 48" fill="none">
+            <rect x="21" y="28" width="6" height="14" rx="1" fill="#5a2d0c"/>
+            <circle cx="16" cy="22" r="11" fill="#2db84b"/>
+            <circle cx="32" cy="22" r="11" fill="#1a9e3f"/>
+            <circle cx="24" cy="14" r="11" fill="#3dd65a"/>
+            <path d="M38 8 L40 10 L44 5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+          </svg>
+        </div>
+
         {trees.map((tree) => {
           const theme = tree.theme ?? {}
           const titleFont = theme.titleFont?.family
-          const bodyFont = theme.bodyFont?.family
           const textColor = theme.textColor ?? '#1a1a1a'
           const intro = tree.intro_content
-
           let bg = '#ffffff'
           if (theme.background?.type === 'gradient' && theme.background.css) {
             bg = theme.background.css
@@ -125,15 +184,21 @@ export default function Home() {
           }
 
           const hasImage = !!intro?.hero_image_url
+          const cardTextColor = hasImage ? '#fff' : textColor
+
+          const handleCardClick = () => {
+            navigate(`/t/${tree.slug}`)
+          }
 
           return (
             <div
               key={tree.id}
-              onClick={() => navigate(`/t/${tree.slug}`)}
+              onClick={handleCardClick}
               style={{
-                flex: '0 0 100%',
-                height: '100%',
-                scrollSnapAlign: 'start',
+                flex: isDesktop ? '0 0 374px' : '0 0 100%',
+                height: isDesktop ? '85%' : '100%',
+                maxHeight: isDesktop ? '720px' : undefined,
+                scrollSnapAlign: 'center',
                 cursor: 'pointer',
                 position: 'relative',
                 display: 'flex',
@@ -141,6 +206,7 @@ export default function Home() {
                 background: bg,
                 color: textColor,
                 overflow: 'hidden',
+                borderRadius: isDesktop ? '1.25rem' : 0,
               }}
             >
               {/* Background image if present */}
@@ -155,12 +221,14 @@ export default function Home() {
                       width: '100%',
                       height: '100%',
                       objectFit: 'cover',
+                      borderRadius: isDesktop ? '1.25rem' : 0,
                     }}
                   />
                   <div style={{
                     position: 'absolute',
                     inset: 0,
                     background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 40%, rgba(0,0,0,0.05) 100%)',
+                    borderRadius: isDesktop ? '1.25rem' : 0,
                   }} />
                 </>
               )}
@@ -168,30 +236,20 @@ export default function Home() {
               {/* Title and description — top left */}
               <div style={{
                 position: 'relative',
-                padding: '3rem 1.5rem 0',
+                padding: isDesktop ? '2rem 1.25rem 0' : '3rem 1.5rem 0',
                 textAlign: 'left',
-                color: hasImage ? '#fff' : textColor,
+                color: cardTextColor,
               }}>
                 <h1 style={{
-                  margin: '0 0 0.75rem',
+                  margin: 0,
                   fontFamily: titleFont,
-                  fontSize: '2.75rem',
+                  fontSize: isDesktop ? '2rem' : '2.75rem',
                   lineHeight: 1.15,
                   fontWeight: 700,
                   color: 'inherit',
                 }}>
                   {intro?.title || tree.title}
                 </h1>
-                {intro?.description && (
-                  <p style={{
-                    margin: 0,
-                    fontFamily: bodyFont,
-                    fontSize: '1rem',
-                    lineHeight: 1.6,
-                  }}>
-                    {intro.description}
-                  </p>
-                )}
               </div>
 
               <div style={{ flex: 1 }} />
@@ -202,28 +260,32 @@ export default function Home() {
 
       <PushPrompt />
 
-      {/* Dot indicators */}
-      {trees.length > 1 && (
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '0.5rem',
-          padding: '1rem 0 2rem',
-        }}>
-          {trees.map((_, i) => (
-            <div
-              key={i}
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: i === activeIndex ? '#fff' : 'rgba(255,255,255,0.3)',
-                transition: 'background 0.2s ease',
-              }}
-            />
-          ))}
-        </div>
-      )}
+      {/* Dot indicators — floats over the cards */}
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        display: 'flex',
+        justifyContent: 'center',
+        gap: '0.5rem',
+        padding: '1rem 0 max(2rem, env(safe-area-inset-bottom))',
+        pointerEvents: 'none',
+        zIndex: 50,
+      }}>
+        {Array.from({ length: trees.length + 1 }, (_, i) => (
+          <div
+            key={i}
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: i === activeIndex ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)',
+              transition: 'background 0.2s ease',
+            }}
+          />
+        ))}
+      </div>
     </div>
   )
 }

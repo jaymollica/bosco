@@ -65,9 +65,9 @@ export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont }:
       display: 'flex',
       flexDirection: 'column',
       width: '100%',
-      minHeight: '100vh',
+      minHeight: '100%',
     }}>
-      {choices.map((choice, i) => {
+      {choices.map((choice) => {
         const isChosen = chosen === choice.id
         const label = choice.label.length > 140 ? choice.label.slice(0, 137) + '…' : choice.label
 
@@ -83,11 +83,7 @@ export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont }:
               height: heightPerChoice,
               padding: '2rem',
               border: 'none',
-              background: isChosen
-                ? 'rgba(0,0,0,0.06)'
-                : i % 2 === 1
-                  ? 'rgba(0,0,0,0.03)'
-                  : 'transparent',
+              background: 'transparent',
               color: 'inherit',
               fontSize: choiceFontSize(label),
               fontFamily: bodyFont,

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import BlurImage from '../BlurImage.js'
 import type { IntroContent, Choice } from '../../types/index.js'
 
@@ -26,7 +26,13 @@ function TapIcon({ size = 32, color = 'currentColor' }: { size?: number; color?:
 
 export default function IntroStep({ content, choices, onChoose, titleFont, bodyFont }: Props) {
   const [tapped, setTapped] = useState(false)
+  const [revealed, setRevealed] = useState(false)
   const hasImage = !!content.hero_image_url
+
+  useEffect(() => {
+    const t = setTimeout(() => setRevealed(true), 50)
+    return () => clearTimeout(t)
+  }, [])
 
   const handleTap = () => {
     if (tapped || choices.length === 0) return
@@ -40,7 +46,7 @@ export default function IntroStep({ content, choices, onChoose, titleFont, bodyF
       onClick={handleTap}
       style={{
         width: '100%',
-        height: '100vh',
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -96,6 +102,8 @@ export default function IntroStep({ content, choices, onChoose, titleFont, bodyF
             fontFamily: bodyFont,
             fontSize: '1rem',
             lineHeight: 1.6,
+            opacity: revealed ? 1 : 0,
+            transition: 'opacity 0.5s ease',
           }}>
             {content.description}
           </p>
@@ -110,7 +118,7 @@ export default function IntroStep({ content, choices, onChoose, titleFont, bodyF
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: tapped ? 0.2 : 0.4,
+        opacity: tapped ? 0.2 : revealed ? 0.4 : 0,
         transition: 'opacity 0.5s ease',
         color: hasImage ? '#fff' : undefined,
       }}>
@@ -123,7 +131,7 @@ export default function IntroStep({ content, choices, onChoose, titleFont, bodyF
         display: 'flex',
         justifyContent: 'center',
         padding: '0 0 3rem',
-        opacity: tapped ? 0.2 : 0.4,
+        opacity: tapped ? 0.2 : revealed ? 0.4 : 0,
         transition: 'opacity 0.5s ease',
         color: hasImage ? '#fff' : undefined,
       }}>
