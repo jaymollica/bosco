@@ -1,4 +1,4 @@
-export type StepType = 'intro' | 'text' | 'image' | 'end'
+export type StepType = 'intro' | 'text' | 'image'
 
 export interface Step {
   id: string
@@ -33,25 +33,18 @@ export interface ImageContent {
   headline: string
 }
 
-export interface EndContent {
-  title: string
-  summary: string
-  cta_label?: string
-  cta_url?: string
-  image_url?: string
-  blur_placeholder?: string
-  alt_text?: string
-}
-
-export type StepContent = IntroContent | TextContent | ImageContent | EndContent
+export type StepContent = IntroContent | TextContent | ImageContent
 
 export interface Choice {
   id: string
   from_step_id: string
-  to_step_id: string
+  to_step_id: string | null
   label: string
   internal_note?: string
   sort_order: number
+  image_url?: string
+  blur_placeholder?: string
+  caption?: string
 }
 
 export interface Theme {

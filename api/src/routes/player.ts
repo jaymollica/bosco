@@ -141,15 +141,20 @@ const playerRoutes: FastifyPluginAsync = async (fastify) => {
       FROM sessions WHERE tree_id = ${tree.id}
     `
 
-    // Count total end steps and how many distinct ones have been reached
+    // Count terminal steps (no outgoing choices) and how many distinct ones have been reached
     const [endStepStats] = await sql`
       SELECT
-        (SELECT COUNT(*)::int FROM steps WHERE tree_version_id = ${tree.version_id} AND type = 'end') AS total_endings,
+        (SELECT COUNT(*)::int FROM steps s
+         WHERE s.tree_version_id = ${tree.version_id}
+         AND NOT EXISTS (SELECT 1 FROM choices c WHERE c.from_step_id = s.id AND c.tree_version_id = s.tree_version_id)
+        ) AS total_endings,
         (SELECT COUNT(DISTINCT se.step_id)::int
          FROM session_events se
          JOIN sessions sess ON sess.id = se.session_id
          JOIN steps s ON s.id = se.step_id
-         WHERE sess.tree_id = ${tree.id} AND s.type = 'end' AND se.choice_id IS NULL
+         WHERE sess.tree_id = ${tree.id}
+         AND NOT EXISTS (SELECT 1 FROM choices c WHERE c.from_step_id = s.id AND c.tree_version_id = s.tree_version_id)
+         AND se.choice_id IS NULL
         ) AS endings_reached
     `
 
@@ -183,7 +188,6 @@ function stepLabel(step: { type: string; content: Record<string, unknown> }): st
   const c = step.content as Record<string, string>
   if (step.type === 'intro') return c.title || 'Intro'
   if (step.type === 'text' || step.type === 'image') return c.headline || step.type
-  if (step.type === 'end') return c.title || 'End'
   return step.type
 }
 

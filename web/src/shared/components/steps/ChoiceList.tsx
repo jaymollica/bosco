@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import type { Choice } from '../../types/index.js'
+import BlurImage from '../BlurImage.js'
 
 interface Props {
   choices: Choice[]
-  onChoose: (choiceId: string, toStepId: string) => void
+  onChoose: (choiceId: string, toStepId: string | null) => void
   // For intro steps with a single CTA button instead of choice labels
   singleLabel?: string
   bodyFont?: string
@@ -48,9 +49,6 @@ export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont }:
     )
   }
 
-  // Each choice gets an equal share of the viewport height
-  const heightPerChoice = `${100 / choices.length}vh`
-
   // Size text based on character count
   const choiceFontSize = (label: string) => {
     const len = label.length
@@ -65,40 +63,76 @@ export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont }:
       display: 'flex',
       flexDirection: 'column',
       width: '100%',
-      minHeight: '100%',
+      height: '100%',
     }}>
       {choices.map((choice) => {
         const isChosen = chosen === choice.id
         const label = choice.label.length > 140 ? choice.label.slice(0, 137) + '…' : choice.label
+        const hasImage = !!choice.image_url
 
         return (
-          <button
+          <div
             key={choice.id}
-            onClick={() => handleClick(choice)}
-            disabled={!!chosen}
+            onClick={() => !chosen && handleClick(choice)}
+            role="button"
             style={{
+              position: 'relative',
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              height: heightPerChoice,
-              padding: '2rem',
-              border: 'none',
+              width: '100%',
+              flex: 1,
+              padding: hasImage ? 0 : '2rem',
               background: 'transparent',
-              color: 'inherit',
+              color: hasImage ? '#fff' : 'inherit',
               fontSize: choiceFontSize(label),
               fontFamily: bodyFont,
               fontWeight: 300,
               letterSpacing: '0.01em',
               lineHeight: 1.3,
+              textAlign: 'center',
               cursor: chosen ? 'default' : 'pointer',
               opacity: chosen && !isChosen ? 0.15 : 1,
-              textAlign: 'center',
-              transition: 'opacity 0.5s ease, background 0.5s ease',
+              transition: 'opacity 0.5s ease',
               boxSizing: 'border-box',
+              overflow: 'hidden',
             }}
           >
-            {label}
-          </button>
+            {hasImage && (
+              <>
+                <BlurImage
+                  src={choice.image_url!}
+                  alt={choice.caption || ''}
+                  blur={choice.blur_placeholder}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                />
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.4) 100%)',
+                }} />
+              </>
+            )}
+            <span style={{ position: 'relative' }}>{label}</span>
+            {hasImage && choice.caption && (
+              <span style={{
+                position: 'relative',
+                fontSize: '0.75rem',
+                fontWeight: 400,
+                opacity: 0.7,
+                marginTop: '0.375rem',
+              }}>
+                {choice.caption}
+              </span>
+            )}
+          </div>
         )
       })}
     </div>

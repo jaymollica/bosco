@@ -36,11 +36,11 @@ export const deleteStep = (treeId: string, stepId: string) =>
   api.delete(`/trees/${treeId}/steps/${stepId}`)
 
 export const addChoice = (treeId: string, data: {
-  from_step_id: string; to_step_id: string; label: string; internal_note?: string; sort_order?: number
+  from_step_id: string; to_step_id: string | null; label: string; internal_note?: string; sort_order?: number
 }) => api.post<Choice>(`/trees/${treeId}/choices`, data).then(r => r.data)
 
 export const updateChoice = (treeId: string, choiceId: string, data: {
-  label?: string; internal_note?: string; sort_order?: number
+  label?: string; internal_note?: string; sort_order?: number; image_url?: string | null; blur_placeholder?: string | null; caption?: string | null
 }) => api.put<Choice>(`/trees/${treeId}/choices/${choiceId}`, data).then(r => r.data)
 
 export const deleteChoice = (treeId: string, choiceId: string) =>

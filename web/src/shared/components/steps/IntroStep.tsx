@@ -5,7 +5,7 @@ import type { IntroContent, Choice } from '../../types/index.js'
 interface Props {
   content: IntroContent
   choices: Choice[]
-  onChoose: (choiceId: string, toStepId: string) => void
+  onChoose: (choiceId: string, toStepId: string | null) => void
   titleFont?: string
   bodyFont?: string
 }

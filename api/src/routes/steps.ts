@@ -67,26 +67,29 @@ const stepRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/api/trees/:id/choices', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     const { id: treeId } = request.params as { id: string }
     const { id: authorId } = request.user as { id: string }
-    const { from_step_id, to_step_id, label, internal_note, sort_order } = request.body as {
+    const { from_step_id, to_step_id, label, internal_note, sort_order, image_url, blur_placeholder, caption } = request.body as {
       from_step_id: string
       to_step_id: string
       label: string
       internal_note?: string
       sort_order?: number
+      image_url?: string
+      blur_placeholder?: string
+      caption?: string
     }
 
     const [tree] = await sql`SELECT * FROM trees WHERE id = ${treeId} AND author_id = ${authorId}`
     if (!tree) return reply.code(404).send({ error: 'Not found' })
 
     // Prevent duplicate connections
-    const [existing] = await sql`
-      SELECT id FROM choices WHERE from_step_id = ${from_step_id} AND to_step_id = ${to_step_id}
-    `
+    const [existing] = to_step_id
+      ? await sql`SELECT id FROM choices WHERE from_step_id = ${from_step_id} AND to_step_id = ${to_step_id}`
+      : await sql`SELECT id FROM choices WHERE from_step_id = ${from_step_id} AND to_step_id IS NULL`
     if (existing) return reply.code(409).send({ error: 'Connection already exists' })
 
     const [choice] = await sql`
-      INSERT INTO choices (from_step_id, to_step_id, label, internal_note, sort_order)
-      VALUES (${from_step_id}, ${to_step_id}, ${label}, ${internal_note ?? null}, ${sort_order ?? 0})
+      INSERT INTO choices (from_step_id, to_step_id, label, internal_note, sort_order, image_url, blur_placeholder, caption)
+      VALUES (${from_step_id}, ${to_step_id}, ${label}, ${internal_note ?? null}, ${sort_order ?? 0}, ${image_url ?? null}, ${blur_placeholder ?? null}, ${caption ?? null})
       RETURNING *
     `
     return reply.code(201).send(choice)
@@ -95,17 +98,23 @@ const stepRoutes: FastifyPluginAsync = async (fastify) => {
   // Update choice
   fastify.put('/api/trees/:id/choices/:choiceId', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     const { choiceId } = request.params as { id: string; choiceId: string }
-    const { label, internal_note, sort_order } = request.body as {
+    const { label, internal_note, sort_order, image_url, blur_placeholder, caption } = request.body as {
       label?: string
       internal_note?: string
       sort_order?: number
+      image_url?: string | null
+      blur_placeholder?: string | null
+      caption?: string | null
     }
 
     const [updated] = await sql`
       UPDATE choices SET
-        label         = COALESCE(${label ?? null}, label),
-        internal_note = COALESCE(${internal_note ?? null}, internal_note),
-        sort_order    = COALESCE(${sort_order ?? null}, sort_order)
+        label            = COALESCE(${label ?? null}, label),
+        internal_note    = COALESCE(${internal_note ?? null}, internal_note),
+        sort_order       = COALESCE(${sort_order ?? null}, sort_order)
+        ${image_url !== undefined ? sql`, image_url = ${image_url}` : sql``}
+        ${blur_placeholder !== undefined ? sql`, blur_placeholder = ${blur_placeholder}` : sql``}
+        ${caption !== undefined ? sql`, caption = ${caption}` : sql``}
       WHERE id = ${choiceId}
       RETURNING *
     `

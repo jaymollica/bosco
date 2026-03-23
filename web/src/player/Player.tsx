@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import axios from 'axios'
-import type { Step, Choice, Theme, IntroContent, TextContent, ImageContent, EndContent } from '../shared/types/index.js'
+import type { Step, Choice, Theme, IntroContent, TextContent, ImageContent } from '../shared/types/index.js'
 import IntroStep from '../shared/components/steps/IntroStep.js'
 import TextStep from '../shared/components/steps/TextStep.js'
 import ImageStep from '../shared/components/steps/ImageStep.js'
-import ChoiceList from '../shared/components/steps/ChoiceList.js'
 import VerticalSankeyChart from '../shared/components/VerticalSankeyChart.js'
 import type { SankeyNode, SankeyLink } from '../shared/components/SankeyChart.js'
 
@@ -94,13 +93,15 @@ export default function Player() {
     api.post(`/sessions/${sessionId}/events`, { step_id: currentStepId }).catch(() => {})
   }, [sessionId, currentStepId])
 
-  // Complete session when landing on a step with no outgoing choices (true end)
+  // Complete session and go to results when landing on a step with no outgoing choices
   useEffect(() => {
     if (!sessionId || !currentStepId || !tree || completedRef.current) return
     const hasChoices = tree.choices.some(c => c.from_step_id === currentStepId)
     if (!hasChoices) {
       completedRef.current = true
       api.post(`/sessions/${sessionId}/complete`).catch(() => {})
+      // Auto-navigate to results after a brief pause
+      setTimeout(() => handleShowResults(), 600)
     }
   }, [sessionId, currentStepId, tree])
 
@@ -119,12 +120,22 @@ export default function Player() {
     return () => { link.remove() }
   }, [tree?.theme])
 
-  const navigate = (choiceId: string, toStepId: string) => {
+  const navigate = (choiceId: string, toStepId: string | null) => {
     if (sessionId && currentStepId) {
       api.post(`/sessions/${sessionId}/events`, {
         step_id: currentStepId,
         choice_id: choiceId,
       }).catch(() => {})
+    }
+    // Null target = go directly to results
+    if (!toStepId) {
+      if (sessionId && !completedRef.current) {
+        completedRef.current = true
+        api.post(`/sessions/${sessionId}/complete`).catch(() => {})
+      }
+      setVisible(false)
+      setTimeout(() => handleShowResults(), 400)
+      return
     }
     doNavigate(toStepId)
   }
@@ -266,18 +277,6 @@ export default function Player() {
           {...stepProps}
         />
       )}
-      {!showResults && currentStep.type === 'end' && stepChoices.length > 0 && (
-        <div style={{ width: '100%' }}>
-          <ChoiceList choices={stepChoices} onChoose={navigate} bodyFont={bodyFont} />
-        </div>
-      )}
-      {!showResults && stepChoices.length === 0 && (
-        <EndChoices
-          content={currentStep.type === 'end' ? currentStep.content as EndContent : undefined}
-          onShowResults={handleShowResults}
-          bodyFont={bodyFont}
-        />
-      )}
       {showResults && (
         <ResultsView
           analytics={analytics}
@@ -342,64 +341,7 @@ export default function Player() {
   )
 }
 
-/** Zelle-style two-tile end choices — labels from end step content, both go to results */
-function EndChoices({ content, onShowResults, bodyFont }: {
-  content?: EndContent
-  onShowResults: () => void
-  bodyFont?: string
-}) {
-  const [chosen, setChosen] = useState<string | null>(null)
 
-  const label1 = content?.title || 'The end'
-  const label2 = content?.summary || 'See your journey'
-
-  const handleClick = (action: string) => {
-    if (chosen) return
-    setChosen(action)
-    setTimeout(onShowResults, 500)
-  }
-
-  const tile = (action: string, label: string) => {
-    const isChosen = chosen === action
-    return (
-      <button
-        key={action}
-        onClick={() => handleClick(action)}
-        disabled={!!chosen}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '50%',
-          width: '100%',
-          padding: '2rem',
-          border: 'none',
-          background: 'transparent',
-          color: 'inherit',
-          fontSize: '1.75rem',
-          fontFamily: bodyFont,
-          fontWeight: 300,
-          letterSpacing: '0.01em',
-          lineHeight: 1.3,
-          cursor: chosen ? 'default' : 'pointer',
-          opacity: chosen && !isChosen ? 0.15 : 1,
-          textAlign: 'center',
-          transition: 'opacity 0.5s ease, background 0.5s ease',
-          boxSizing: 'border-box',
-        }}
-      >
-        {label}
-      </button>
-    )
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
-      {tile('a', label1)}
-      {tile('b', label2)}
-    </div>
-  )
-}
 
 /** Inline results: vertical Sankey + stats — fits in one viewport, swipe for other tours */
 function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds, onPlayAgain, bodyFont, titleFont, slug, otherTours }: {

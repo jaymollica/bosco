@@ -251,18 +251,18 @@ GET    /api/trees/:id/analytics         Sankey edge weights, session count, thre
 When a tree is created, a template is seeded based on `depth` (2, 3, or 4):
 
 ```
-Intro → 1 text step → (depth-1) levels of binary text branching → 2^depth end steps
+Intro → 1 text step → (depth-1) levels of binary text branching → 2^depth leaf text steps (choices → results)
 ```
 
-- depth 2 → 4 outcomes (Intro + 1 + 2 + 4 End = 8 steps total)
-- depth 3 → 8 outcomes (Intro + 1 + 2 + 4 + 8 End = 16 steps total)
-- depth 4 → 16 outcomes (Intro + 1 + 2 + 4 + 8 + 16 End = 32 steps total)
+- depth 2 → 4 outcomes (Intro + 1 + 2 + 4 leaf = 8 steps total)
+- depth 3 → 8 outcomes (Intro + 1 + 2 + 4 + 8 leaf = 16 steps total)
+- depth 4 → 16 outcomes (Intro + 1 + 2 + 4 + 8 + 16 leaf = 32 steps total)
 
 **Key constraints from publish validation:**
 - Intro step requires exactly 1 choice (its CTA navigates to the first text step)
 - All text/image steps require ≥ 2 choices
-- All end steps require a title
-- The last branching level in the template is `end` type — not text steps that feed a shared end card
+- Leaf steps have choices with `to_step_id = NULL` (navigate directly to results)
+- There is no `end` step type — terminal behaviour is determined by null-target choices
 
 ---
 
@@ -314,7 +314,7 @@ Intro → 1 text step → (depth-1) levels of binary text branching → 2^depth 
 - Intro step: book-cover layout — title and description top-left, optional full-bleed hero image with gradient scrim, tap icon + "tap to begin" hint, tapping anywhere navigates
 - Text steps are choice-only (no headline/body prompt) — choices describe what comes next, reader infers the path
 - Zelle-style choice UI: large full-width tiles splitting viewport equally, adaptive text sizing (4 tiers: ≤30/60/100/140 chars), 140-char max with ellipsis, alternating subtle shading
-- End steps with choices render as choice-only tiles (no image/description); terminal end steps show two author-written tiles (from end step title + summary), both leading to results view
+- Choices with `to_step_id = NULL` navigate directly to the results view (no intermediate step)
 - BlurImage component: LQIP blur-up loading for all images
 - ChoiceList: locks after selection (highlights chosen, fades others over 500ms); remounts per step via `key={stepId}`
 - Session recording: create on load, arrival events, choice events, complete on step with no outgoing choices
@@ -326,7 +326,7 @@ Intro → 1 text step → (depth-1) levels of binary text branching → 2^depth 
 ### Phase 3 — Analytics & Sharing ✅ COMPLETE
 - Custom vertical Sankey chart (top-to-bottom, no d3-sankey) with BFS depth assignment, proportional width slicing per level, filled bezier bands (80/20 control points), 10px inter-band gaps
 - Results view: fits one viewport — stats side-by-side ("X% explored" + "X% took your path"), vertical Sankey filling remaining space, "Play again" + "Share" buttons at bottom
-- "% explored" = distinct end steps reached / total end steps (not session completion rate)
+- "% explored" = distinct terminal steps reached / total terminal steps (detected by absence of outgoing choices)
 - "% took your path" = sessions matching exact choice path / completed sessions
 - Share modal: QR code (via `qrcode` npm, `toDataURL` for mobile compatibility) + copyable URL
 - Analytics API: public `GET /api/t/:slug/analytics` returns nodes, links, stats (total_sessions, completed_sessions, total_endings, endings_reached), and top 10 paths

@@ -5,7 +5,7 @@ import ChoiceList from './ChoiceList.js'
 interface Props {
   content: ImageContent
   choices: Choice[]
-  onChoose: (choiceId: string, toStepId: string) => void
+  onChoose: (choiceId: string, toStepId: string | null) => void
   titleFont?: string
   bodyFont?: string
 }

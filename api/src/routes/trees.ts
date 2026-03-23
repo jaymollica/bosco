@@ -37,7 +37,7 @@ async function sendPublishNotification(title: string, slug: string) {
   }
 }
 
-// Template: Intro → 1 text step → (depth-1) text branching levels → 2^depth end steps
+// Template: Intro → 1 text step → (depth-1) text branching levels → 2^depth text steps
 // depth 2 → 4 outcomes, depth 3 → 8 outcomes, depth 4 → 16 outcomes
 async function seedDefaultTemplate(versionId: string, depth: 2 | 3 | 4 = 4) {
   const NODE_W = 240
@@ -72,17 +72,16 @@ async function seedDefaultTemplate(versionId: string, depth: 2 | 3 | 4 = 4) {
   await sql`INSERT INTO choices (from_step_id, to_step_id, label, sort_order)
             VALUES (${intro.id}, ${first.id}, '', 0)`
 
-  // Build branching levels: 2, 4, ... 2^(depth-1) text nodes, then 2^depth end nodes
+  // Build branching levels: 2, 4, ... 2^depth text nodes
   const levels: string[][] = []
   for (let l = 0; l < depth; l++) {
     const count = Math.pow(2, l + 1)
-    const isLeaf = l === depth - 1
     const ids: string[] = []
     for (let i = 0; i < count; i++) {
       const [row] = await sql`
         INSERT INTO steps (tree_version_id, type, position_x, position_y, content)
-        VALUES (${versionId}, ${isLeaf ? 'end' : 'text'}, ${xAt(count, i)}, ${(l + 2) * LEVEL_H},
-                ${isLeaf ? '{"title":"","summary":""}' : '{"headline":"","body":""}'}::jsonb)
+        VALUES (${versionId}, 'text', ${xAt(count, i)}, ${(l + 2) * LEVEL_H},
+                '{"headline":"","body":""}'::jsonb)
         RETURNING id
       `
       ids.push(row.id)
@@ -96,7 +95,7 @@ async function seedDefaultTemplate(versionId: string, depth: 2 | 3 | 4 = 4) {
   await sql`INSERT INTO choices (from_step_id, to_step_id, label, sort_order)
             VALUES (${first.id}, ${levels[0][1]}, '', 1)`
 
-  // Wire each level to the next (text levels only; end levels have no choices)
+  // Wire each level to the next
   for (let l = 0; l < depth - 1; l++) {
     for (let i = 0; i < levels[l].length; i++) {
       await sql`INSERT INTO choices (from_step_id, to_step_id, label, sort_order)
@@ -251,10 +250,8 @@ const treeRoutes: FastifyPluginAsync = async (fastify) => {
     const errors: string[] = []
 
     const introSteps = steps.filter((s: { type: string }) => s.type === 'intro')
-    const endSteps = steps.filter((s: { type: string }) => s.type === 'end')
 
     if (introSteps.length === 0) errors.push('Tree must have an Intro Card')
-    if (endSteps.length === 0) errors.push('Tree must have an End Card')
 
     for (const step of steps) {
       const c = step.content as Record<string, unknown>
@@ -264,11 +261,8 @@ const treeRoutes: FastifyPluginAsync = async (fastify) => {
       if ((step.type === 'text' || step.type === 'image') && !c.headline) {
         errors.push(`Step "${step.id}" is missing a headline`)
       }
-      if (step.type === 'end' && !c.title) {
-        errors.push(`End Card is missing a title`)
-      }
-      if (step.type !== 'end') {
-        const stepChoices = choices.filter((ch: { from_step_id: string }) => ch.from_step_id === step.id)
+      const stepChoices = choices.filter((ch: { from_step_id: string }) => ch.from_step_id === step.id)
+      if (stepChoices.length > 0) {
         const minChoices = step.type === 'intro' ? 1 : 2
         if (stepChoices.length < minChoices) {
           errors.push(`Step "${step.id}" needs at least ${minChoices} choice${minChoices > 1 ? 's' : ''}`)
@@ -305,13 +299,16 @@ const treeRoutes: FastifyPluginAsync = async (fastify) => {
     // Copy choices with remapped step ids
     for (const choice of choices) {
       await sql`
-        INSERT INTO choices (from_step_id, to_step_id, label, internal_note, sort_order)
+        INSERT INTO choices (from_step_id, to_step_id, label, internal_note, sort_order, image_url, blur_placeholder, caption)
         VALUES (
           ${idMap[choice.from_step_id]},
           ${idMap[choice.to_step_id]},
           ${choice.label},
           ${choice.internal_note ?? null},
-          ${choice.sort_order}
+          ${choice.sort_order},
+          ${choice.image_url ?? null},
+          ${choice.blur_placeholder ?? null},
+          ${choice.caption ?? null}
         )
       `
     }
@@ -430,7 +427,6 @@ const treeRoutes: FastifyPluginAsync = async (fastify) => {
       const c = s.content as Record<string, string>
       if (s.type === 'intro') return c.title || 'Intro'
       if (s.type === 'text' || s.type === 'image') return c.headline || s.type
-      if (s.type === 'end') return c.title || 'End'
       return s.type
     }
 

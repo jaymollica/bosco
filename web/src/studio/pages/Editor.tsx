@@ -12,24 +12,25 @@ import '@xyflow/react/dist/style.css'
 import { getTree, updateStep, addChoice, updateChoice, deleteChoice, deleteStep, addStep, publishTree, unpublishTree, updateTheme } from '../../shared/api/trees.js'
 import type { TreeWithGraph, Step, Choice, StepType, Theme } from '../../shared/types/index.js'
 import StepNode from '../components/StepNode.js'
+import ResultsNode from '../components/ResultsNode.js'
 import StepEditor from '../components/StepEditor.js'
 import ThemePanel from '../components/ThemePanel.js'
 
-const NODE_TYPES = { step: StepNode }
+const RESULTS_NODE_ID = '__results__'
+const NODE_TYPES = { step: StepNode, results: ResultsNode }
 
 const DEFAULT_CONTENT: Record<StepType, Record<string, unknown>> = {
   intro: { title: '', description: '', cta_label: 'Begin' },
   text:  { headline: '', body: '' },
   image: { headline: '', image_url: '', alt_text: '', caption: '' },
-  end:   { title: '', summary: '' },
 }
 
-function stepsToNodes(steps: Step[]): StepNode[] {
+function stepsToNodes(steps: Step[], choices: Choice[] = []): StepNode[] {
   return steps.map(step => ({
     id: step.id,
     type: 'step',
     position: { x: step.position_x, y: step.position_y },
-    data: { step },
+    data: { step, choices },
   })) as StepNode[]
 }
 
@@ -37,9 +38,10 @@ function choicesToEdges(choices: Choice[]): Edge[] {
   return choices.map(c => ({
     id: c.id,
     source: c.from_step_id,
-    target: c.to_step_id,
+    target: c.to_step_id ?? RESULTS_NODE_ID,
     label: c.label || undefined,
     type: 'smoothstep',
+    ...(c.to_step_id ? {} : { style: { strokeDasharray: '6 3', stroke: '#059669' }, animated: true }),
   }))
 }
 
@@ -56,16 +58,58 @@ export default function Editor() {
   const [publishing, setPublishing] = useState(false)
   const [publishErrors, setPublishErrors] = useState<string[]>([])
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const saveStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const markSaving = () => {
+    setSaveStatus('saving')
+    if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+  }
+  const markSaved = () => {
+    setSaveStatus('saved')
+    if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+    saveStatusTimer.current = setTimeout(() => setSaveStatus('idle'), 2000)
+  }
 
   useEffect(() => {
     if (!id) return
     getTree(id).then(data => {
       setTree(data)
-      setNodes(stepsToNodes(data.steps))
+      const stepNodes = stepsToNodes(data.steps, data.choices)
+
+      // Position results node below the lowest step
+      const maxY = data.steps.reduce((max, s) => Math.max(max, s.position_y), 0)
+      const nullTargetChoices = data.choices.filter(c => !c.to_step_id)
+      const sourcesOfNull = data.steps.filter(s => nullTargetChoices.some(c => c.from_step_id === s.id))
+      const avgX = sourcesOfNull.length > 0
+        ? sourcesOfNull.reduce((sum, s) => sum + s.position_x, 0) / sourcesOfNull.length
+        : 400
+      const resultsNode: Node = {
+        id: RESULTS_NODE_ID,
+        type: 'results',
+        position: { x: avgX, y: maxY + 200 },
+        data: {},
+        draggable: true,
+        selectable: false,
+        deletable: false,
+      }
+
+      setNodes([...stepNodes, resultsNode] as StepNode[])
       setEdges(choicesToEdges(data.choices))
       setChoices(data.choices)
     })
   }, [id])
+
+  // Keep node data and results edges in sync with choices
+  useEffect(() => {
+    setNodes(nds => nds.map(n => {
+      if (n.id === RESULTS_NODE_ID) return n
+      return { ...n, data: { ...n.data, choices } }
+    }) as StepNode[])
+
+    // Rebuild edges from choices (null to_step_id → Results node)
+    setEdges(choicesToEdges(choices))
+  }, [choices])
 
   // Debounced position save when nodes are dragged
   const handleNodesChange = useCallback((changes: NodeChange<StepNode>[]) => {
@@ -74,10 +118,11 @@ export default function Editor() {
     for (const change of posChanges) {
       if (change.type !== 'position') continue
       const node = nodes.find(n => n.id === change.id)
-      if (!node || !id) continue
+      if (!node || !id || node.id === RESULTS_NODE_ID) continue
       if (saveTimer.current) clearTimeout(saveTimer.current)
+      markSaving()
       saveTimer.current = setTimeout(() => {
-        updateStep(id, node.id, { position_x: node.position.x, position_y: node.position.y })
+        updateStep(id, node.id, { position_x: node.position.x, position_y: node.position.y }).then(markSaved)
       }, 500)
     }
   }, [nodes, id])
@@ -85,15 +130,23 @@ export default function Editor() {
   // Create a choice when the user draws a connection
   const handleConnect = useCallback(async (connection: Connection) => {
     if (!id || !connection.source || !connection.target) return
+    if (connection.source === RESULTS_NODE_ID) return
+    const isToResults = connection.target === RESULTS_NODE_ID
     try {
       const newChoice = await addChoice(id, {
         from_step_id: connection.source,
-        to_step_id: connection.target,
+        to_step_id: isToResults ? null : connection.target,
         label: '',
         sort_order: choices.filter(c => c.from_step_id === connection.source).length,
       })
       setChoices(prev => [...prev, newChoice])
-      setEdges(eds => addEdge({ ...connection, id: newChoice.id, type: 'smoothstep' }, eds))
+      setEdges(eds => addEdge({
+        ...connection,
+        id: newChoice.id,
+        target: isToResults ? RESULTS_NODE_ID : connection.target,
+        type: 'smoothstep',
+        ...(isToResults ? { style: { strokeDasharray: '6 3', stroke: '#059669' }, animated: true } : {}),
+      }, eds))
     } catch {
       // duplicate connection — ignore
     }
@@ -102,19 +155,23 @@ export default function Editor() {
   const handleEdgeDelete = useCallback(async (deletedEdges: Edge[]) => {
     if (!id) return
     for (const edge of deletedEdges) {
+      if (edge.target === RESULTS_NODE_ID) continue
       await deleteChoice(id, edge.id)
       setChoices(prev => prev.filter(c => c.id !== edge.id))
     }
   }, [id])
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: StepNode) => {
+    if (node.id === RESULTS_NODE_ID) return
     const step = node.data.step
     setSelectedStep(step)
   }, [])
 
   const handleUpdateContent = useCallback(async (content: Record<string, unknown>) => {
     if (!id || !selectedStep) return
+    markSaving()
     await updateStep(id, selectedStep.id, { content })
+    markSaved()
     // Update node data in place
     setNodes(nds => nds.map(n => n.id === selectedStep.id
       ? { ...n, data: { step: { ...n.data.step, content: content as unknown as Step['content'] } } }
@@ -122,11 +179,15 @@ export default function Editor() {
     ) as StepNode[])
   }, [id, selectedStep])
 
-  const handleUpdateChoice = useCallback(async (choiceId: string, label: string) => {
+  const handleUpdateChoice = useCallback(async (choiceId: string, data: { label?: string; image_url?: string | null; blur_placeholder?: string | null; caption?: string | null }) => {
     if (!id) return
-    await updateChoice(id, choiceId, { label })
-    setChoices(prev => prev.map(c => c.id === choiceId ? { ...c, label } : c))
-    setEdges(eds => eds.map(e => e.id === choiceId ? { ...e, label } : e))
+    markSaving()
+    await updateChoice(id, choiceId, data)
+    markSaved()
+    setChoices(prev => prev.map(c => c.id === choiceId ? { ...c, ...data } as Choice : c))
+    if (data.label !== undefined) {
+      setEdges(eds => eds.map(e => e.id === choiceId ? { ...e, label: data.label } : e))
+    }
   }, [id])
 
   const handleDeleteChoice = useCallback(async (choiceId: string) => {
@@ -176,7 +237,8 @@ export default function Editor() {
     if (!id) return
     setTree(prev => prev ? { ...prev, theme } : null)
     if (themeTimer.current) clearTimeout(themeTimer.current)
-    themeTimer.current = setTimeout(() => updateTheme(id, theme), 600)
+    markSaving()
+    themeTimer.current = setTimeout(() => updateTheme(id, theme).then(markSaved), 600)
   }, [id])
 
   if (!tree) return <div style={{ padding: '2rem', color: '#888' }}>Loading…</div>
@@ -190,10 +252,15 @@ export default function Editor() {
         <button onClick={() => navigate('/studio')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', fontSize: '0.875rem' }}>← Trees</button>
         <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{tree.title}</span>
         <span style={{ fontSize: '0.75rem', color: tree.status === 'published' ? '#2a9d2a' : '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{tree.status}</span>
+        {saveStatus !== 'idle' && (
+          <span style={{ fontSize: '0.7rem', color: '#aaa', fontStyle: 'italic', transition: 'opacity 0.3s ease', opacity: saveStatus === 'saved' ? 0.6 : 1 }}>
+            {saveStatus === 'saving' ? 'Saving…' : 'Saved'}
+          </span>
+        )}
         <div style={{ flex: 1 }} />
 
         {/* Step bank */}
-        {(['intro', 'text', 'image', 'end'] as StepType[]).map(type => (
+        {(['intro', 'text', 'image'] as StepType[]).map(type => (
           <button key={type} onClick={() => handleAddStep(type)} style={{ padding: '0.375rem 0.75rem', fontSize: '0.75rem', background: '#f3f3f3', border: '1px solid #ddd', borderRadius: '4px', cursor: 'pointer', textTransform: 'capitalize' }}>
             + {type}
           </button>
@@ -253,6 +320,7 @@ export default function Editor() {
           onNodeClick={handleNodeClick}
           onNodesDelete={handleDeleteNode}
           fitView
+          minZoom={0.1}
           deleteKeyCode="Delete"
         >
           <Background />

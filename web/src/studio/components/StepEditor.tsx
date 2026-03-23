@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Step, Choice } from '../../shared/types/index.js'
 import { uploadImage } from '../../shared/api/trees.js'
 import ImageLibrary from './ImageLibrary.js'
+
+type ChoiceUpdate = { label?: string; image_url?: string | null; blur_placeholder?: string | null; caption?: string | null }
 
 interface Props {
   step: Step
   choices: Choice[]
   steps: Step[]
   onUpdateContent: (content: Record<string, unknown>) => void
-  onUpdateChoice: (choiceId: string, label: string) => void
+  onUpdateChoice: (choiceId: string, data: ChoiceUpdate) => void
   onDeleteChoice: (choiceId: string) => void
   onClose: () => void
 }
@@ -19,8 +21,25 @@ export default function StepEditor({ step, choices, steps, onUpdateContent, onUp
   const [showLibrary, setShowLibrary] = useState(false)
   const [libraryUrlKey, setLibraryUrlKey] = useState('')
 
+  // Local text state for choices to avoid cursor jumping
+  const [localChoiceText, setLocalChoiceText] = useState<Record<string, { label?: string; caption?: string }>>({})
+  const choiceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
+  const updateChoiceText = useCallback((choiceId: string, field: 'label' | 'caption', value: string) => {
+    setLocalChoiceText(prev => ({ ...prev, [choiceId]: { ...prev[choiceId], [field]: value } }))
+    if (choiceTimers.current[choiceId + field]) clearTimeout(choiceTimers.current[choiceId + field])
+    choiceTimers.current[choiceId + field] = setTimeout(() => {
+      onUpdateChoice(choiceId, { [field]: value })
+    }, 400)
+  }, [onUpdateChoice])
+
   useEffect(() => {
     setContent(step.content as unknown as Record<string, unknown>)
+  }, [step.id])
+
+  // Reset local choice text when step changes
+  useEffect(() => {
+    setLocalChoiceText({})
   }, [step.id])
 
   const update = (key: string, value: unknown) => {
@@ -131,15 +150,7 @@ export default function StepEditor({ step, choices, steps, onUpdateContent, onUp
           {field('Caption', 'caption')}
         </>}
 
-        {step.type === 'end' && <>
-          {field('Title', 'title')}
-          {field('Summary', 'summary', true)}
-          {field('CTA label (optional)', 'cta_label')}
-          {field('CTA URL (optional)', 'cta_url')}
-        </>}
-
-        {step.type !== 'end' && (
-          <div style={{ marginTop: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
+        <div style={{ marginTop: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#555', marginBottom: '0.75rem' }}>
               Choices ({stepChoices.length})
             </div>
@@ -148,20 +159,51 @@ export default function StepEditor({ step, choices, steps, onUpdateContent, onUp
               return (
                 <div key={choice.id} style={{ marginBottom: '0.75rem', background: '#f9f9f9', borderRadius: '6px', padding: '0.625rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                    <span style={{ fontSize: '0.7rem', color: '#888' }}>Choice {i + 1} → {target?.type ?? '?'}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#888' }}>Choice {i + 1} → {choice.to_step_id ? (target?.type ?? '?') : 'Results'}</span>
                     <button onClick={() => onDeleteChoice(choice.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c00', fontSize: '0.75rem' }}>remove</button>
                   </div>
                   <input
                     type="text"
-                    value={choice.label}
-                    maxLength={80}
-                    onChange={e => onUpdateChoice(choice.id, e.target.value)}
+                    value={localChoiceText[choice.id]?.label ?? choice.label}
+                    maxLength={140}
+                    onChange={e => updateChoiceText(choice.id, 'label', e.target.value)}
                     placeholder="Choice label…"
                     style={{ width: '100%', padding: '0.375rem 0.5rem', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', fontSize: '0.8rem' }}
                   />
-                  <div style={{ fontSize: '0.65rem', color: choice.label.length > 72 ? '#c00' : '#aaa', textAlign: 'right', marginTop: '0.2rem' }}>
-                    {choice.label.length}/80
+                  <div style={{ fontSize: '0.65rem', color: (localChoiceText[choice.id]?.label ?? choice.label).length > 120 ? '#c00' : '#aaa', textAlign: 'right', marginTop: '0.2rem' }}>
+                    {(localChoiceText[choice.id]?.label ?? choice.label).length}/140
                   </div>
+                  {/* Choice image */}
+                  <div style={{ marginTop: '0.5rem' }}>
+                    {choice.image_url ? (
+                      <div style={{ position: 'relative' }}>
+                        <img src={choice.image_url} alt="" style={{ display: 'block', width: '100%', borderRadius: '4px', maxHeight: '80px', objectFit: 'cover' }} />
+                        <button
+                          onClick={() => onUpdateChoice(choice.id, { image_url: null, blur_placeholder: null })}
+                          style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: '0.7rem', cursor: 'pointer', lineHeight: '20px', padding: 0 }}
+                        >×</button>
+                      </div>
+                    ) : (
+                      <label style={{ fontSize: '0.75rem', cursor: 'pointer', color: '#888', textDecoration: 'underline' }}>
+                        + Add image
+                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          const { url, blur_placeholder } = await uploadImage(file)
+                          onUpdateChoice(choice.id, { image_url: url, blur_placeholder })
+                        }} />
+                      </label>
+                    )}
+                  </div>
+                  {choice.image_url && (
+                    <input
+                      type="text"
+                      value={localChoiceText[choice.id]?.caption ?? choice.caption ?? ''}
+                      onChange={e => updateChoiceText(choice.id, 'caption', e.target.value)}
+                      placeholder="Caption (optional)…"
+                      style={{ width: '100%', marginTop: '0.375rem', padding: '0.375rem 0.5rem', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', fontSize: '0.75rem' }}
+                    />
+                  )}
                 </div>
               )
             })}
@@ -169,7 +211,6 @@ export default function StepEditor({ step, choices, steps, onUpdateContent, onUp
               <p style={{ fontSize: '0.75rem', color: '#888' }}>Connect this step to another step on the canvas to add a choice.</p>
             )}
           </div>
-        )}
       </div>
     </div>
 

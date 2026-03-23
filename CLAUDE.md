@@ -33,24 +33,22 @@ A decision tree authoring and player app. See `PLAN.md` for the full technical p
 - `intro`: `{ title, description, hero_image_url?, blur_placeholder?, cta_label }`
 - `text`: `{ headline?, body? }` — headline/body exist in schema but are **not rendered in the player**; choices carry the content (see Player Behaviour). Studio hides these fields for now (data model preserved for future use).
 - `image`: `{ image_url, blur_placeholder?, alt_text, caption, headline }`
-- `end`: `{ title, summary, cta_label?, cta_url?, image_url?, blur_placeholder?, alt_text? }`
 
-End cards support an optional painting/image at the top — useful for destination-reveal patterns.
+There is no `end` step type. All branching is done with `text` steps. Terminal behaviour is determined by choices: a choice with `to_step_id = NULL` navigates directly to the results/summary view.
 
 ## Default Tree Template
 Tree creation accepts `depth: 2 | 3 | 4`. Template seeded:
 ```
-Intro → 1 text step → (depth-1) binary text levels → 2^depth end steps
+Intro → 1 text step → (depth-1) binary text levels → 2^depth leaf text steps (choices → results)
 ```
-- The last branching level is `end` type steps, not text steps feeding a shared end card
+- Leaf steps are `text` type with 2 choices whose `to_step_id` is NULL (go to results)
 - Intro validation: requires exactly 1 choice (CTA navigates to first text step)
 - Text/image validation: requires ≥ 2 choices and all choice labels filled
-- End validation: requires a title
 
 ## Player Routes (public, no auth)
 - `GET /api/published` — list all published trees (includes theme + intro_content for home page rendering)
 - `GET /api/t/:slug` — full tree graph (steps + choices + theme) for the published version; 301s on old slugs
-- `GET /api/t/:slug/analytics` — Sankey nodes/links, session stats (total_sessions, completed_sessions, total_endings, endings_reached), top 10 paths
+- `GET /api/t/:slug/analytics` — Sankey nodes/links, session stats (total_sessions, completed_sessions, total_endings, endings_reached), top 10 paths. Terminal steps detected by absence of outgoing choices (not by step type).
 - `POST /api/sessions` — create anonymous session `{ tree_id, tree_version_id }`
 - `POST /api/sessions/:id/events` — record `{ step_id, choice_id? }` (null choice_id = arrival)
 - `POST /api/sessions/:id/complete` — mark session done
@@ -69,11 +67,10 @@ Intro → 1 text step → (depth-1) binary text levels → 2^depth end steps
 - Step wrapper uses `key={currentStepId}` — forces full remount on navigation, resetting ChoiceList state
 - Choices lock after selection (chosen highlighted, others fade to 15% opacity over 500ms); `disabled` prevents double-tap
 - Fade transition: opacity → 0 over 400ms, then step changes, then opacity → 1 over 400ms
-- **End steps with choices** render as choice-only tiles (no image/description shown)
-- **Terminal end steps** (no outgoing choices) show two author-written tiles using the end step's `title` and `summary` as labels; both tiles navigate to the results view
+- **Terminal choices** — choices with `to_step_id = NULL` go directly to the results view (no intermediate step). Session is marked complete on selection.
 - **Results view** — single viewport, no scroll: stats side-by-side ("X% explored" = distinct endings reached / total endings, "X% took your path"), custom vertical Sankey chart filling remaining space, "Play again" + "Share" buttons at bottom (same horizontal padding as Sankey)
 - **Share modal** — QR code via `qrcode` npm (`toDataURL` for mobile compatibility, not `toString` SVG) + copyable URL
-- **Session completion** triggers when user arrives at a step with no outgoing choices (based on `tree.choices`, not step type)
+- **Session completion** triggers when a choice with `to_step_id = NULL` is selected, or when a step has no outgoing choices
 - Google Fonts loaded by injecting a `<link>` into `<head>` from the theme's font families
 - **Home page** — horizontal scroll-snap carousel of full-viewport title cards, each rendering with its tour's theme/fonts/background. Dot indicators at bottom. All tour fonts loaded via single Google Fonts link.
 
@@ -98,3 +95,12 @@ Global `*, *::before, *::after { box-sizing: border-box }` is set in `index.css`
 - Phase 1 ✅ Phase 2 ✅ Phase 3 ✅ Phase 4 = PWA (homescreen install, offline caching, push notifications)
 - QR code: uses `qrcode` npm package with `toDataURL` (not `toString` SVG — browser build doesn't support SVG output)
 - Vertical Sankey: custom implementation in `VerticalSankeyChart.tsx` (no d3-sankey), BFS depth assignment, proportional width slicing
+
+## Choice Schema
+`choices(id, from_step_id, to_step_id, label, internal_note, sort_order, image_url, blur_placeholder, caption)`
+- `to_step_id` is nullable — NULL means "navigate to results" (terminal choice)
+- `image_url` / `blur_placeholder` / `caption` support image choices with LQIP blur loading
+- Choices with images render as full-bleed background tiles with gradient scrim and white text
+
+## Studio Editor — Results Node
+The tree editor shows a synthetic "Results" node (green, non-editable, non-deletable) representing the Sankey summary view. Choices with `to_step_id = NULL` render as dashed green animated edges connecting to this node. Authors can draw connections to the Results node to create terminal choices. The node is implemented in `ResultsNode.tsx` with ID `__results__`.
