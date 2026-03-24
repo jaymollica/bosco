@@ -187,7 +187,7 @@ export default function Player() {
 
   if (error) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif' }}>
+      <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif' }}>
         <p style={{ color: '#888' }}>{error}</p>
       </div>
     )
@@ -195,7 +195,7 @@ export default function Player() {
 
   if (!tree || !currentStepId) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif' }}>
+      <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif' }}>
         <p style={{ color: '#aaa', fontSize: '0.875rem' }}>Loading…</p>
       </div>
     )
@@ -324,7 +324,7 @@ export default function Player() {
   return (
     <div
       style={{
-        height: '100vh',
+        height: '100dvh',
         background,
         color: textColor,
         display: 'flex',

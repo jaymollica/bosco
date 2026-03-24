@@ -45,7 +45,7 @@ const playerRoutes: FastifyPluginAsync = async (fastify) => {
     `
 
     const choices = await sql`
-      SELECT c.id, c.from_step_id, c.to_step_id, c.label, c.sort_order
+      SELECT c.id, c.from_step_id, c.to_step_id, c.label, c.sort_order, c.image_url, c.blur_placeholder, c.caption
       FROM choices c
       JOIN steps s ON s.id = c.from_step_id
       WHERE s.tree_version_id = ${tree.tree_version_id}
@@ -141,19 +141,21 @@ const playerRoutes: FastifyPluginAsync = async (fastify) => {
       FROM sessions WHERE tree_id = ${tree.id}
     `
 
-    // Count terminal steps (no outgoing choices) and how many distinct ones have been reached
+    // Terminal steps = steps whose outgoing choices all have to_step_id IS NULL
     const [endStepStats] = await sql`
       SELECT
         (SELECT COUNT(*)::int FROM steps s
          WHERE s.tree_version_id = ${tree.version_id}
-         AND NOT EXISTS (SELECT 1 FROM choices c WHERE c.from_step_id = s.id AND c.tree_version_id = s.tree_version_id)
+         AND EXISTS (SELECT 1 FROM choices c WHERE c.from_step_id = s.id AND c.to_step_id IS NULL)
+         AND NOT EXISTS (SELECT 1 FROM choices c WHERE c.from_step_id = s.id AND c.to_step_id IS NOT NULL)
         ) AS total_endings,
         (SELECT COUNT(DISTINCT se.step_id)::int
          FROM session_events se
          JOIN sessions sess ON sess.id = se.session_id
          JOIN steps s ON s.id = se.step_id
          WHERE sess.tree_id = ${tree.id}
-         AND NOT EXISTS (SELECT 1 FROM choices c WHERE c.from_step_id = s.id AND c.tree_version_id = s.tree_version_id)
+         AND EXISTS (SELECT 1 FROM choices c WHERE c.from_step_id = s.id AND c.to_step_id IS NULL)
+         AND NOT EXISTS (SELECT 1 FROM choices c WHERE c.from_step_id = s.id AND c.to_step_id IS NOT NULL)
          AND se.choice_id IS NULL
         ) AS endings_reached
     `

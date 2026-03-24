@@ -243,7 +243,7 @@ export default function Editor() {
 
   if (!tree) return <div style={{ padding: '2rem', color: '#888' }}>Loading…</div>
 
-  const currentSteps = nodes.map(n => n.data.step)
+  const currentSteps = nodes.filter(n => n.id !== RESULTS_NODE_ID).map(n => n.data.step)
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>

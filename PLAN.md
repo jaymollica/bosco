@@ -259,10 +259,11 @@ Intro → 1 text step → (depth-1) levels of binary text branching → 2^depth 
 - depth 4 → 16 outcomes (Intro + 1 + 2 + 4 + 8 + 16 leaf = 32 steps total)
 
 **Key constraints from publish validation:**
-- Intro step requires exactly 1 choice (its CTA navigates to the first text step)
-- All text/image steps require ≥ 2 choices
+- Intro step requires title and CTA label, exactly 1 choice
+- All non-intro steps require ≥ 2 choices (labels optional — image-only choices are valid)
 - Leaf steps have choices with `to_step_id = NULL` (navigate directly to results)
 - There is no `end` step type — terminal behaviour is determined by null-target choices
+- No headline requirements on any step type
 
 ---
 

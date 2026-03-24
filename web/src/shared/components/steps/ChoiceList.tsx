@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Choice } from '../../types/index.js'
 import BlurImage from '../BlurImage.js'
+import { parseStyledText, stripMarkers } from '../../lib/styledText.js'
 
 interface Props {
   choices: Choice[]
@@ -51,7 +52,7 @@ export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont }:
 
   // Size text based on character count
   const choiceFontSize = (label: string) => {
-    const len = label.length
+    const len = stripMarkers(label).length
     if (len <= 30) return '1.75rem'
     if (len <= 60) return '1.4rem'
     if (len <= 100) return '1.15rem'
@@ -64,10 +65,13 @@ export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont }:
       flexDirection: 'column',
       width: '100%',
       height: '100%',
+      gap: '4px',
     }}>
       {choices.map((choice) => {
         const isChosen = chosen === choice.id
-        const label = choice.label.length > 140 ? choice.label.slice(0, 137) + '…' : choice.label
+        const visualText = stripMarkers(choice.label)
+        const isTruncated = visualText.length > 140
+        const label = isTruncated ? visualText.slice(0, 137) + '…' : choice.label
         const hasImage = !!choice.image_url
 
         return (
@@ -83,9 +87,9 @@ export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont }:
               justifyContent: 'center',
               width: '100%',
               flex: 1,
-              padding: hasImage ? 0 : '2rem',
+              padding: '1rem',
               background: 'transparent',
-              color: hasImage ? '#fff' : 'inherit',
+              color: 'inherit',
               fontSize: choiceFontSize(label),
               fontFamily: bodyFont,
               fontWeight: 300,
@@ -100,27 +104,19 @@ export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont }:
             }}
           >
             {hasImage && (
-              <>
-                <BlurImage
-                  src={choice.image_url!}
-                  alt={choice.caption || ''}
-                  blur={choice.blur_placeholder}
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                  }}
-                />
-                <div style={{
-                  position: 'absolute',
-                  inset: 0,
-                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.4) 100%)',
-                }} />
-              </>
+              <BlurImage
+                src={choice.image_url!}
+                alt={choice.caption || ''}
+                blur={choice.blur_placeholder}
+                objectFit="contain"
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  width: '100%',
+                }}
+              />
             )}
-            <span style={{ position: 'relative' }}>{label}</span>
+            {label && <span style={{ flexShrink: 0, padding: hasImage ? '0.25rem 0' : undefined }}>{isTruncated ? label : parseStyledText(label)}</span>}
             {hasImage && choice.caption && (
               <span style={{
                 position: 'relative',

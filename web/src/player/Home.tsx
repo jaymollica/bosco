@@ -87,7 +87,7 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111' }}>
+      <div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111' }}>
         <p style={{ color: '#555', fontSize: '0.875rem', fontFamily: 'system-ui, sans-serif' }}>Loading…</p>
       </div>
     )
@@ -95,7 +95,7 @@ export default function Home() {
 
   if (trees.length === 0) {
     return (
-      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111' }}>
+      <div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111' }}>
         <p style={{ color: '#555', fontSize: '0.875rem', fontFamily: 'system-ui, sans-serif' }}>No published tours yet.</p>
       </div>
     )
@@ -103,7 +103,7 @@ export default function Home() {
 
   return (
     <div style={{
-      height: '100vh',
+      height: '100dvh',
       background: '#111',
       display: 'flex',
       flexDirection: 'column',

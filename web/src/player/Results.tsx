@@ -50,13 +50,13 @@ export default function Results() {
   }, [])
 
   if (error) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <p style={{ color: '#888', fontFamily: 'sans-serif' }}>Results not available.</p>
     </div>
   )
 
   if (!analytics || !summary) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <p style={{ color: '#aaa', fontSize: '0.875rem', fontFamily: 'sans-serif' }}>Loading…</p>
     </div>
   )
@@ -72,7 +72,7 @@ export default function Results() {
   const pathLabels = summary.choice_ids.map(cid => linksByChoiceId.get(cid)?.label).filter(Boolean) as string[]
 
   return (
-    <div style={{ minHeight: '100vh', background: '#fafaf8', color: '#1a1a1a' }}>
+    <div style={{ minHeight: '100dvh', background: '#fafaf8', color: '#1a1a1a' }}>
       <div style={{ maxWidth: '680px', margin: '0 auto', padding: '2.5rem 1.5rem' }}>
 
         {/* Header */}

@@ -43,12 +43,12 @@ Intro → 1 text step → (depth-1) binary text levels → 2^depth leaf text ste
 ```
 - Leaf steps are `text` type with 2 choices whose `to_step_id` is NULL (go to results)
 - Intro validation: requires exactly 1 choice (CTA navigates to first text step)
-- Text/image validation: requires ≥ 2 choices and all choice labels filled
+- Text/image validation: requires ≥ 2 choices (labels are optional — image-only choices are valid)
 
 ## Player Routes (public, no auth)
 - `GET /api/published` — list all published trees (includes theme + intro_content for home page rendering)
 - `GET /api/t/:slug` — full tree graph (steps + choices + theme) for the published version; 301s on old slugs
-- `GET /api/t/:slug/analytics` — Sankey nodes/links, session stats (total_sessions, completed_sessions, total_endings, endings_reached), top 10 paths. Terminal steps detected by absence of outgoing choices (not by step type).
+- `GET /api/t/:slug/analytics` — Sankey nodes/links, session stats (total_sessions, completed_sessions, total_endings, endings_reached), top 10 paths. Terminal steps detected by having only NULL-target choices (all outgoing `to_step_id IS NULL`).
 - `POST /api/sessions` — create anonymous session `{ tree_id, tree_version_id }`
 - `POST /api/sessions/:id/events` — record `{ step_id, choice_id? }` (null choice_id = arrival)
 - `POST /api/sessions/:id/complete` — mark session done
@@ -60,7 +60,7 @@ Intro → 1 text step → (depth-1) binary text levels → 2^depth leaf text ste
 - `/studio/*` → Author Studio
 
 ## Player Behaviour
-- **Fixed viewport** — player wrapper uses `position: fixed; overflow: hidden` to prevent iOS bounce scrolling
+- **Fixed viewport** — player wrapper uses `position: fixed; overflow: hidden` with `100dvh` (not `100vh`) to account for mobile browser chrome (URL bar)
 - **Intro step (book-cover layout)** — title and description top-left, optional full-bleed hero image with top-down gradient scrim, tap icon centered + "tap to begin" at bottom. Tapping anywhere navigates. Text forced to `color: inherit` to override global `h1 { color: var(--text-h) }` CSS rule.
 - **Text steps are choice-only** — no headline/body prompt; the choice labels describe what comes next and the reader infers the path
 - **Zelle-style choice tiles** — choices are large full-width blocks that split the viewport equally; adaptive text sizing in 4 tiers (≤30 chars → 1.75rem, ≤60 → 1.4rem, ≤100 → 1.15rem, ≤140 → 1rem), 140-char max with ellipsis truncation. Alternating subtle background shading, weight 300, no borders.
@@ -92,7 +92,7 @@ Global `*, *::before, *::after { box-sizing: border-box }` is set in `index.css`
 - Restart API: `systemctl restart bosco-api`
 - All player routes are public; author studio routes require JWT (`fastify.authenticate`)
 - Choices queries use JOIN (not sql.array()) to avoid `uuid = text` operator error in postgres.js
-- Phase 1 ✅ Phase 2 ✅ Phase 3 ✅ Phase 4 = PWA (homescreen install, offline caching, push notifications)
+- Phase 1 ✅ Phase 2 ✅ Phase 3 ✅ Phase 4 ✅ Phase 5 = Theming Polish (font pairing presets, WCAG AA contrast checker)
 - QR code: uses `qrcode` npm package with `toDataURL` (not `toString` SVG — browser build doesn't support SVG output)
 - Vertical Sankey: custom implementation in `VerticalSankeyChart.tsx` (no d3-sankey), BFS depth assignment, proportional width slicing
 
@@ -100,7 +100,16 @@ Global `*, *::before, *::after { box-sizing: border-box }` is set in `index.css`
 `choices(id, from_step_id, to_step_id, label, internal_note, sort_order, image_url, blur_placeholder, caption)`
 - `to_step_id` is nullable — NULL means "navigate to results" (terminal choice)
 - `image_url` / `blur_placeholder` / `caption` support image choices with LQIP blur loading
-- Choices with images render as full-bleed background tiles with gradient scrim and white text
+- Choices with images render with `objectFit: contain` (no cropping), padded within the tile
+
+## Choice Label Styling
+Choice labels support inline markdown: `**bold**`, `*italic*`, `***bold italic***`. Parsed by `parseStyledText()` in `web/src/shared/lib/styledText.tsx`. Studio editor uses a textarea with B/I toolbar buttons that toggle markers around selected text. Character counter uses `stripMarkers()` to show visual length (excluding markers). The `BlurImage` component accepts an `objectFit` prop (`cover` default, `contain` for choice tiles).
+
+## Publish Validation
+- Intro step requires title and CTA label
+- All non-intro steps require ≥ 2 choices
+- No label or headline requirements (image-only tours are valid)
+- Terminal choices (`to_step_id = NULL`) are always valid
 
 ## Studio Editor — Results Node
 The tree editor shows a synthetic "Results" node (green, non-editable, non-deletable) representing the Sankey summary view. Choices with `to_step_id = NULL` render as dashed green animated edges connecting to this node. Authors can draw connections to the Results node to create terminal choices. The node is implemented in `ResultsNode.tsx` with ID `__results__`.

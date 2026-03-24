@@ -104,6 +104,15 @@ async function seedDefaultTemplate(versionId: string, depth: 2 | 3 | 4 = 4) {
                 VALUES (${levels[l][i]}, ${levels[l + 1][i * 2 + 1]}, '', 1)`
     }
   }
+
+  // Wire leaf steps → results (terminal choices with null to_step_id)
+  const leaves = levels[depth - 1]
+  for (const leafId of leaves) {
+    await sql`INSERT INTO choices (from_step_id, to_step_id, label, sort_order)
+              VALUES (${leafId}, NULL, '', 0)`
+    await sql`INSERT INTO choices (from_step_id, to_step_id, label, sort_order)
+              VALUES (${leafId}, NULL, '', 1)`
+  }
 }
 
 const treeRoutes: FastifyPluginAsync = async (fastify) => {
@@ -258,9 +267,6 @@ const treeRoutes: FastifyPluginAsync = async (fastify) => {
       if (step.type === 'intro' && (!c.title || !c.cta_label)) {
         errors.push(`Intro Card is missing title or CTA label`)
       }
-      if ((step.type === 'text' || step.type === 'image') && !c.headline) {
-        errors.push(`Step "${step.id}" is missing a headline`)
-      }
       const stepChoices = choices.filter((ch: { from_step_id: string }) => ch.from_step_id === step.id)
       if (stepChoices.length > 0) {
         const minChoices = step.type === 'intro' ? 1 : 2
@@ -268,9 +274,6 @@ const treeRoutes: FastifyPluginAsync = async (fastify) => {
           errors.push(`Step "${step.id}" needs at least ${minChoices} choice${minChoices > 1 ? 's' : ''}`)
         }
         for (const ch of stepChoices) {
-          // Intro CTA label comes from step content, not the choice label
-          if (step.type !== 'intro' && !ch.label) errors.push(`A choice on step "${step.id}" is missing a label`)
-          if (!ch.to_step_id) errors.push(`A choice on step "${step.id}" has no target step`)
         }
       }
     }
@@ -302,7 +305,7 @@ const treeRoutes: FastifyPluginAsync = async (fastify) => {
         INSERT INTO choices (from_step_id, to_step_id, label, internal_note, sort_order, image_url, blur_placeholder, caption)
         VALUES (
           ${idMap[choice.from_step_id]},
-          ${idMap[choice.to_step_id]},
+          ${choice.to_step_id ? idMap[choice.to_step_id] : null},
           ${choice.label},
           ${choice.internal_note ?? null},
           ${choice.sort_order},

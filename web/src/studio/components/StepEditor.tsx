@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Step, Choice } from '../../shared/types/index.js'
 import { uploadImage } from '../../shared/api/trees.js'
 import ImageLibrary from './ImageLibrary.js'
+import { stripMarkers, toggleMarker } from '../../shared/lib/styledText.js'
 
 type ChoiceUpdate = { label?: string; image_url?: string | null; blur_placeholder?: string | null; caption?: string | null }
 
@@ -24,6 +25,7 @@ export default function StepEditor({ step, choices, steps, onUpdateContent, onUp
   // Local text state for choices to avoid cursor jumping
   const [localChoiceText, setLocalChoiceText] = useState<Record<string, { label?: string; caption?: string }>>({})
   const choiceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({})
 
   const updateChoiceText = useCallback((choiceId: string, field: 'label' | 'caption', value: string) => {
     setLocalChoiceText(prev => ({ ...prev, [choiceId]: { ...prev[choiceId], [field]: value } }))
@@ -32,6 +34,17 @@ export default function StepEditor({ step, choices, steps, onUpdateContent, onUp
       onUpdateChoice(choiceId, { [field]: value })
     }, 400)
   }, [onUpdateChoice])
+
+  const handleFormatting = (choiceId: string, marker: string) => {
+    const el = textareaRefs.current[choiceId]
+    if (!el) return
+    const result = toggleMarker(el.value, el.selectionStart, el.selectionEnd, marker)
+    updateChoiceText(choiceId, 'label', result.text)
+    requestAnimationFrame(() => {
+      el.selectionStart = result.selStart
+      el.selectionEnd = result.selEnd
+    })
+  }
 
   useEffect(() => {
     setContent(step.content as unknown as Record<string, unknown>)
@@ -162,16 +175,28 @@ export default function StepEditor({ step, choices, steps, onUpdateContent, onUp
                     <span style={{ fontSize: '0.7rem', color: '#888' }}>Choice {i + 1} → {choice.to_step_id ? (target?.type ?? '?') : 'Results'}</span>
                     <button onClick={() => onDeleteChoice(choice.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c00', fontSize: '0.75rem' }}>remove</button>
                   </div>
-                  <input
-                    type="text"
+                  <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.25rem' }}>
+                    <button
+                      type="button"
+                      onMouseDown={e => { e.preventDefault(); handleFormatting(choice.id, '**') }}
+                      style={{ background: '#eee', border: '1px solid #ddd', borderRadius: '3px', padding: '0.125rem 0.375rem', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 700, lineHeight: 1.4 }}
+                    >B</button>
+                    <button
+                      type="button"
+                      onMouseDown={e => { e.preventDefault(); handleFormatting(choice.id, '*') }}
+                      style={{ background: '#eee', border: '1px solid #ddd', borderRadius: '3px', padding: '0.125rem 0.375rem', cursor: 'pointer', fontSize: '0.7rem', fontStyle: 'italic', lineHeight: 1.4 }}
+                    >I</button>
+                  </div>
+                  <textarea
+                    ref={el => { textareaRefs.current[choice.id] = el }}
                     value={localChoiceText[choice.id]?.label ?? choice.label}
-                    maxLength={140}
                     onChange={e => updateChoiceText(choice.id, 'label', e.target.value)}
                     placeholder="Choice label…"
-                    style={{ width: '100%', padding: '0.375rem 0.5rem', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', fontSize: '0.8rem' }}
+                    rows={3}
+                    style={{ width: '100%', padding: '0.375rem 0.5rem', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', fontSize: '0.8rem', resize: 'vertical', fontFamily: 'inherit' }}
                   />
-                  <div style={{ fontSize: '0.65rem', color: (localChoiceText[choice.id]?.label ?? choice.label).length > 120 ? '#c00' : '#aaa', textAlign: 'right', marginTop: '0.2rem' }}>
-                    {(localChoiceText[choice.id]?.label ?? choice.label).length}/140
+                  <div style={{ fontSize: '0.65rem', color: stripMarkers(localChoiceText[choice.id]?.label ?? choice.label).length > 120 ? '#c00' : '#aaa', textAlign: 'right', marginTop: '0.2rem' }}>
+                    {stripMarkers(localChoiceText[choice.id]?.label ?? choice.label).length}/140
                   </div>
                   {/* Choice image */}
                   <div style={{ marginTop: '0.5rem' }}>

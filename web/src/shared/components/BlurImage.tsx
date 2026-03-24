@@ -5,9 +5,10 @@ interface Props {
   alt: string
   blur?: string
   style?: React.CSSProperties
+  objectFit?: 'cover' | 'contain'
 }
 
-export default function BlurImage({ src, alt, blur, style }: Props) {
+export default function BlurImage({ src, alt, blur, style, objectFit = 'cover' }: Props) {
   const [loaded, setLoaded] = useState(false)
 
   return (
@@ -15,7 +16,7 @@ export default function BlurImage({ src, alt, blur, style }: Props) {
       style={{
         position: 'relative',
         overflow: 'hidden',
-        background: blur ? `url(${blur}) center/cover no-repeat` : '#eee',
+        background: blur ? `url(${blur}) center/${objectFit} no-repeat` : '#eee',
         ...style,
       }}
     >
@@ -27,7 +28,7 @@ export default function BlurImage({ src, alt, blur, style }: Props) {
           display: 'block',
           width: '100%',
           height: '100%',
-          objectFit: 'cover',
+          objectFit,
           opacity: loaded ? 1 : 0,
           transition: 'opacity 0.4s ease',
         }}
