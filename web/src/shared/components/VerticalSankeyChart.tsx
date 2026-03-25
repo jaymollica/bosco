@@ -30,10 +30,10 @@ interface Band {
  * Bands flow between the proportional slices — no overlap.
  */
 export default function VerticalSankeyChart({ nodes, links, highlightChoiceIds, width = 320, height = 480 }: Props) {
-  const barH = 6
-  const bandGap = 10 // px gap between adjacent bands
+  const bandGap = 4 // px gap between adjacent bands
+  const minSliceW = 8 // minimum px width per node slice
 
-  const { bands, nodeRects } = useMemo(() => {
+  const { bands } = useMemo(() => {
     if (!nodes.length) return { bands: [] as Band[], nodeRects: [] as { left: number; right: number; y: number }[] }
 
     // Adjacency
@@ -71,13 +71,13 @@ export default function VerticalSankeyChart({ nodes, links, highlightChoiceIds, 
     const nodeFlow = new Map<string, number>()
     for (const n of nodes) {
       const incoming = inLinks.get(n.id) ?? []
-      const total = incoming.reduce((s, l) => s + Math.max(l.value, 0.5), 0)
+      const total = incoming.reduce((s, l) => s + Math.max(l.value, 1), 0)
       if (total > 0) {
         nodeFlow.set(n.id, total)
       } else {
         // Root: use outgoing
         const outgoing = outLinks.get(n.id) ?? []
-        nodeFlow.set(n.id, outgoing.reduce((s, l) => s + Math.max(l.value, 0.5), 0) || 1)
+        nodeFlow.set(n.id, outgoing.reduce((s, l) => s + Math.max(l.value, 1), 0) || 1)
       }
     }
 
@@ -120,13 +120,23 @@ export default function VerticalSankeyChart({ nodes, links, highlightChoiceIds, 
       const gapSpace = numGaps * bandGap
       const usableW = width - gapSpace
       const totalFlow = levelNodes.reduce((s, id) => s + (nodeFlow.get(id) ?? 1), 0)
+
+      // First pass: compute proportional widths and enforce minimums
+      const rawWidths = levelNodes.map(id => {
+        const flow = nodeFlow.get(id) ?? 1
+        return (flow / totalFlow) * usableW
+      })
+      const clampedWidths = rawWidths.map(w => Math.max(w, minSliceW))
+      // Rescale so total still fits
+      const clampedTotal = clampedWidths.reduce((a, b) => a + b, 0)
+      const scale = clampedTotal > usableW ? usableW / clampedTotal : 1
+      const finalWidths = clampedWidths.map(w => w * scale)
+
       let cursor = 0
       for (let ni = 0; ni < levelNodes.length; ni++) {
         const id = levelNodes[ni]
-        const flow = nodeFlow.get(id) ?? 1
         const left = cursor
-        const sliceW = (flow / totalFlow) * usableW
-        const right = cursor + sliceW
+        const right = cursor + finalWidths[ni]
         nodeSlice.set(id, { left, right })
         cursor = right + bandGap
       }
@@ -157,32 +167,31 @@ export default function VerticalSankeyChart({ nodes, links, highlightChoiceIds, 
       const srcDepth = depthMap.get(srcId) ?? 0
       const srcY = yPositions[srcDepth] + barH / 2
 
-      const totalOut = nodeLinks.reduce((s, l) => s + Math.max(l.value, 0.5), 0)
+      const minFlow = 1
+      const totalOut = nodeLinks.reduce((s, l) => s + Math.max(l.value, minFlow), 0)
       let sCur = srcSlice.left
 
       for (let li = 0; li < nodeLinks.length; li++) {
         const l = nodeLinks[li]
-        const val = Math.max(l.value, 0.5)
+        const val = Math.max(l.value, minFlow)
 
-        // Source band slice with gap
-        const sLeft = sCur + (li > 0 ? bandGap / 2 : 0)
+        // Source band slice
+        const sLeft = sCur
         const rawRight = sCur + (val / totalOut) * (srcSlice.right - srcSlice.left)
-        const sRight = rawRight - (li < nodeLinks.length - 1 ? bandGap / 2 : 0)
+        const sRight = rawRight
         sCur = rawRight
 
-        // Target band slice with gap
+        // Target band slice
         const tgtSlice = nodeSlice.get(l.target)
         if (!tgtSlice) continue
         const tgtDepth = depthMap.get(l.target) ?? 0
         const tgtY = yPositions[tgtDepth] - barH / 2
 
         const tCurStart = tgtCursor.get(l.target) ?? tgtSlice.left
-        const totalIn = (inLinks.get(l.target) ?? []).reduce((s, il) => s + Math.max(il.value, 0.5), 0)
-        const inLinksForTarget = inLinks.get(l.target) ?? []
-        const tIdx = inLinksForTarget.indexOf(l)
+        const totalIn = (inLinks.get(l.target) ?? []).reduce((s, il) => s + Math.max(il.value, minFlow), 0)
         const tWidth = (val / totalIn) * (tgtSlice.right - tgtSlice.left)
-        const tLeft = tCurStart + (tIdx > 0 ? bandGap / 2 : 0)
-        const tRight = tCurStart + tWidth - (tIdx < inLinksForTarget.length - 1 ? bandGap / 2 : 0)
+        const tLeft = tCurStart
+        const tRight = tCurStart + tWidth
         tgtCursor.set(l.target, tCurStart + tWidth)
 
         resultBands.push({
@@ -193,20 +202,13 @@ export default function VerticalSankeyChart({ nodes, links, highlightChoiceIds, 
       }
     }
 
-    const rects = resultSlices.map(s => ({
-      left: s.left,
-      right: s.right,
-      y: s.y,
-    }))
-
-    return { bands: resultBands, nodeRects: rects }
+    return { bands: resultBands }
   }, [nodes, links, width, height])
 
   const bandPath = (b: Band) => {
     const dy = b.tgtY - b.srcY
-    // Control points stay vertical for 80% of the distance before curving
-    const c1y = b.srcY + dy * 0.8
-    const c2y = b.srcY + dy * 0.2
+    const c1y = b.srcY + dy * 0.65
+    const c2y = b.srcY + dy * 0.35
     return [
       `M${b.srcLeft},${b.srcY}`,
       `C${b.srcLeft},${c1y} ${b.tgtLeft},${c2y} ${b.tgtLeft},${b.tgtY}`,
@@ -216,32 +218,42 @@ export default function VerticalSankeyChart({ nodes, links, highlightChoiceIds, 
     ].join(' ')
   }
 
+  // Tufte: maximize data-ink, remove chartjunk.
+  // - No node bars (the bands themselves show the flow — bars are redundant)
+  // - Highlighted path is the primary data; other bands recede
+  // - Muted, purposeful opacity: highlight stands out, rest is quiet context
   return (
     <svg width={width} height={height} style={{ display: 'block', margin: '0 auto' }}>
-      {/* Individual node bars */}
-      <g>
-        {(nodeRects ?? []).map((r, i) => (
-          <rect
-            key={i}
-            x={r.left} y={r.y - barH / 2}
-            width={r.right - r.left} height={barH}
-            fill="currentColor"
-            opacity={0.12}
-            rx={3}
-          />
-        ))}
-      </g>
-      {/* Bands */}
+      {/* Background bands — muted context */}
       <g>
         {bands.map((b, i) => {
           const highlighted = highlightChoiceIds?.has(b.choiceId)
+          if (highlighted) return null
           return (
             <path
               key={i}
               d={bandPath(b)}
               fill="currentColor"
-              fillOpacity={highlighted ? 0.4 : 0.1}
+              fillOpacity={0.07}
               stroke="none"
+            />
+          )
+        })}
+      </g>
+      {/* Highlighted path — drawn on top for clarity */}
+      <g>
+        {bands.map((b, i) => {
+          const highlighted = highlightChoiceIds?.has(b.choiceId)
+          if (!highlighted) return null
+          return (
+            <path
+              key={i}
+              d={bandPath(b)}
+              fill="currentColor"
+              fillOpacity={0.35}
+              stroke="currentColor"
+              strokeOpacity={0.2}
+              strokeWidth={0.5}
             />
           )
         })}

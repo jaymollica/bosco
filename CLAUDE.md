@@ -92,7 +92,7 @@ Global `*, *::before, *::after { box-sizing: border-box }` is set in `index.css`
 - Restart API: `systemctl restart bosco-api`
 - All player routes are public; author studio routes require JWT (`fastify.authenticate`)
 - Choices queries use JOIN (not sql.array()) to avoid `uuid = text` operator error in postgres.js
-- Phase 1 ✅ Phase 2 ✅ Phase 3 ✅ Phase 4 ✅ Phase 5 = Theming Polish (font pairing presets, WCAG AA contrast checker)
+- Phase 1 ✅ Phase 2 ✅ Phase 3 ✅ Phase 4 ✅ Phase 5 = Import/Export & HTML Trees
 - QR code: uses `qrcode` npm package with `toDataURL` (not `toString` SVG — browser build doesn't support SVG output)
 - Vertical Sankey: custom implementation in `VerticalSankeyChart.tsx` (no d3-sankey), BFS depth assignment, proportional width slicing
 

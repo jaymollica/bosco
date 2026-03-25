@@ -42,7 +42,12 @@ interface AnalyticsData {
 function buildFontUrl(theme: Theme): string | null {
   const families: string[] = []
   const addFont = (font?: { family: string; weight: string }) => {
-    if (font?.family) families.push(`${font.family.replace(/ /g, '+')}:wght@${font.weight || '400'}`)
+    if (!font?.family) return
+    const name = font.family.replace(/ /g, '+')
+    const w = font.weight || '400'
+    // Request both 400 and the chosen weight so single-weight fonts still load
+    const weights = w === '400' ? '400' : `400;${w}`
+    families.push(`${name}:wght@${weights}`)
   }
   addFont(theme.titleFont)
   if (theme.bodyFont?.family !== theme.titleFont?.family) addFont(theme.bodyFont)
@@ -215,12 +220,12 @@ export default function Player() {
 
   let background = '#ffffff'
   if (theme.background?.type === 'gradient' && theme.background.css) {
-    background = theme.background.css
+    background = theme.background.css.replace(/;\s*$/, '').trim()
   } else if (theme.background?.type === 'solid' && theme.background.color) {
     background = theme.background.color
   }
 
-  const stepProps = { titleFont, bodyFont }
+  const stepProps = { titleFont, bodyFont, textColor, themeBackground: theme.background }
 
   // Compute results stats
   let completionPct = 0
@@ -482,7 +487,7 @@ function ResultsView({ analytics, completionPct, samePathPct, highlightChoiceIds
         const tFont = t.titleFont?.family
         const tColor = t.textColor ?? '#1a1a1a'
         let bg = '#ffffff'
-        if (t.background?.type === 'gradient' && t.background.css) bg = t.background.css
+        if (t.background?.type === 'gradient' && t.background.css) bg = t.background.css.replace(/;\s*$/, '').trim()
         else if (t.background?.type === 'solid' && t.background.color) bg = t.background.color
         const hasImage = !!tour.intro_content?.hero_image_url
         const cardTextColor = hasImage ? '#fff' : tColor

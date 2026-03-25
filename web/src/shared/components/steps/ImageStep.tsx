@@ -8,9 +8,11 @@ interface Props {
   onChoose: (choiceId: string, toStepId: string | null) => void
   titleFont?: string
   bodyFont?: string
+  textColor?: string
+  themeBackground?: { type?: string; color?: string; css?: string }
 }
 
-export default function ImageStep({ content, choices, onChoose, titleFont, bodyFont }: Props) {
+export default function ImageStep({ content, choices, onChoose, titleFont, bodyFont, textColor, themeBackground }: Props) {
   return (
     <div style={{ width: '100%' }}>
       {content.image_url && (
@@ -34,7 +36,7 @@ export default function ImageStep({ content, choices, onChoose, titleFont, bodyF
             {content.headline}
           </h2>
         )}
-        <ChoiceList choices={choices} onChoose={onChoose} bodyFont={bodyFont} />
+        <ChoiceList choices={choices} onChoose={onChoose} bodyFont={bodyFont} textColor={textColor} themeBackground={themeBackground} />
       </div>
     </div>
   )

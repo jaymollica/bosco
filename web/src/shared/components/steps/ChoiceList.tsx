@@ -9,9 +9,19 @@ interface Props {
   // For intro steps with a single CTA button instead of choice labels
   singleLabel?: string
   bodyFont?: string
+  themeBackground?: { type?: string; color?: string; css?: string }
+  textColor?: string
 }
 
-export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont }: Props) {
+/** Resolve the theme background to a CSS background value for tiles. */
+function tileBg(bg?: { type?: string; color?: string; css?: string }): string {
+  if (!bg) return 'transparent'
+  if (bg.type === 'gradient' && bg.css) return bg.css.replace(/;\s*$/, '').trim()
+  if (bg.type === 'solid' && bg.color) return bg.color
+  return 'transparent'
+}
+
+export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont, themeBackground }: Props) {
   const [chosen, setChosen] = useState<string | null>(null)
 
   if (choices.length === 0) return null
@@ -65,7 +75,6 @@ export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont }:
       flexDirection: 'column',
       width: '100%',
       height: '100%',
-      gap: '4px',
     }}>
       {choices.map((choice) => {
         const isChosen = chosen === choice.id
@@ -73,7 +82,6 @@ export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont }:
         const isTruncated = visualText.length > 140
         const label = isTruncated ? visualText.slice(0, 137) + '…' : choice.label
         const hasImage = !!choice.image_url
-
         return (
           <div
             key={choice.id}
@@ -88,7 +96,7 @@ export default function ChoiceList({ choices, onChoose, singleLabel, bodyFont }:
               width: '100%',
               flex: 1,
               padding: '1rem',
-              background: 'transparent',
+              background: tileBg(themeBackground),
               color: 'inherit',
               fontSize: choiceFontSize(label),
               fontFamily: bodyFont,

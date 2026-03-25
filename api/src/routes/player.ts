@@ -1,5 +1,34 @@
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import type { FastifyPluginAsync } from 'fastify'
 import sql from '../db/client.js'
+
+const INDEX_HTML = readFileSync(resolve(import.meta.dirname, '../../../public/index.html'), 'utf-8')
+const SITE_URL = 'https://bosco.vaguespac.es'
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function injectOgTags(html: string, meta: { title: string; description: string; image: string; url: string }): string {
+  const tags = [
+    `<meta property="og:title" content="${escapeHtml(meta.title)}">`,
+    `<meta property="og:description" content="${escapeHtml(meta.description)}">`,
+    `<meta property="og:image" content="${escapeHtml(meta.image)}">`,
+    `<meta property="og:url" content="${escapeHtml(meta.url)}">`,
+    `<meta property="og:type" content="website">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:title" content="${escapeHtml(meta.title)}">`,
+    `<meta name="twitter:description" content="${escapeHtml(meta.description)}">`,
+    `<meta name="twitter:image" content="${escapeHtml(meta.image)}">`,
+    `<title>${escapeHtml(meta.title)} — Bosco</title>`,
+  ].join('\n    ')
+  // Strip default OG/Twitter tags and title, then inject tree-specific ones
+  const stripped = html
+    .replace(/<meta property="og:[^"]*" content="[^"]*">\n?\s*/g, '')
+    .replace(/<meta name="twitter:[^"]*" content="[^"]*">\n?\s*/g, '')
+  return stripped.replace('<title>Bosco</title>', tags)
+}
 
 const playerRoutes: FastifyPluginAsync = async (fastify) => {
   // List all published trees (public)
@@ -12,6 +41,49 @@ const playerRoutes: FastifyPluginAsync = async (fastify) => {
       WHERE t.status = 'published'
       ORDER BY t.published_at DESC
     `
+  })
+
+  // Serve SPA with OG meta tags for /t/:slug (social media previews)
+  fastify.get('/t/:slug', async (request, reply) => {
+    const { slug } = request.params as { slug: string }
+
+    const [tree] = await sql`
+      SELECT t.title, t.slug,
+             (SELECT s.content FROM steps s
+              WHERE s.tree_version_id = tv.id AND s.type = 'intro' LIMIT 1) AS intro_content
+      FROM trees t
+      JOIN tree_versions tv ON tv.id = t.current_version_id
+      WHERE t.slug = ${slug} AND t.status = 'published'
+    `
+
+    if (!tree) {
+      // Check slug history for redirect
+      const [history] = await sql`
+        SELECT t.slug FROM tree_slug_history h
+        JOIN trees t ON t.id = h.tree_id
+        WHERE h.old_slug = ${slug}
+        ORDER BY h.created_at DESC LIMIT 1
+      `
+      if (history) return reply.redirect(301, `/t/${history.slug}`)
+      // Fall through to SPA for 404 handling
+      return reply.type('text/html').send(INDEX_HTML)
+    }
+
+    const intro = (tree.intro_content ?? {}) as Record<string, string>
+    const description = intro.description || 'An interactive tour on Bosco'
+    const heroUrl = intro.hero_image_url || ''
+    const image = heroUrl
+      ? (heroUrl.startsWith('http') ? heroUrl : `${SITE_URL}${heroUrl}`)
+      : `${SITE_URL}/apple-touch-icon.png`
+
+    const html = injectOgTags(INDEX_HTML, {
+      title: tree.title,
+      description,
+      image,
+      url: `${SITE_URL}/t/${tree.slug}`,
+    })
+
+    return reply.type('text/html').send(html)
   })
 
   // Get published tree by slug (public)
@@ -182,7 +254,17 @@ const playerRoutes: FastifyPluginAsync = async (fastify) => {
       label: stepLabel(s),
     }))
 
-    return { title: tree.title, stats: { ...stats, ...endStepStats }, nodes, links, topPaths }
+    // Add synthetic Results node and remap null targets for terminal choices
+    const hasTerminal = links.some((l: { target: string | null }) => !l.target)
+    if (hasTerminal) {
+      nodes.push({ id: '__results__', type: 'end', label: 'Results' })
+    }
+    const mappedLinks = links.map((l: { target: string | null }) => ({
+      ...l,
+      target: l.target ?? '__results__',
+    }))
+
+    return { title: tree.title, stats: { ...stats, ...endStepStats }, nodes, links: mappedLinks, topPaths }
   })
 }
 

@@ -342,11 +342,75 @@ Intro → 1 text step → (depth-1) levels of binary text branching → 2^depth 
 - Service worker: cache app shell (HTML/CSS/JS) + tour data and images for offline playback
 - Web Push notifications when a new tour is published (VAPID keys, server-side subscription storage, push via `web-push` library; iOS requires PWA to be added to homescreen first)
 
-### Phase 5 — Theming Polish
+### Phase 5 — Import / Export & HTML Trees
+
+#### JSON Export & Import
+- `GET /api/trees/:id/export` — returns full tree as a portable JSON bundle (steps, choices, theme, images as data URIs or `/uploads/` paths)
+- `POST /api/trees/import` — accepts a JSON bundle, creates a new tree with all steps/choices/images; remaps IDs
+- Studio UI: "Export" button in editor toolbar downloads `.json` file; "Import" option on tree list page accepts `.json` upload
+
+#### HTML ↔ Tree Conversion
+A structured HTML document serves as a **dual-format source**: readable linearly as a web page, or playable as a branching tree in Bosco.
+
+**HTML structure convention:**
+```html
+<article data-bosco-tree>
+  <section data-step="intro">
+    <h1>Tour Title</h1>
+    <p>Description text</p>
+    <img src="hero.jpg" alt="...">
+  </section>
+
+  <section data-step="text">
+    <div data-choice="Label for option A">
+      <section data-step="text">
+        <!-- nested branching continues -->
+        <div data-choice="Terminal choice" data-terminal>
+          <p>This path ends here.</p>
+        </div>
+      </section>
+    </div>
+    <div data-choice="Label for option B">
+      <section data-step="image">
+        <img src="painting.jpg" alt="...">
+        <figcaption>Caption text</figcaption>
+      </section>
+    </div>
+  </section>
+</article>
+```
+
+- `<section data-step="intro|text|image">` maps to a Bosco step
+- `<div data-choice="label">` maps to a choice; its children are the target step
+- `data-terminal` marks a choice as going directly to results (`to_step_id = NULL`)
+- Nesting depth = tree depth; sibling `data-choice` divs = branching
+- Images inside sections become step images or choice images
+- `**bold**` and `*italic*` in choice labels preserved
+
+**Import flow (`POST /api/trees/import-html`):**
+1. Parse HTML with a lightweight parser (e.g., `node-html-parser`)
+2. Walk the DOM tree recursively: each `<section data-step>` → Step row, each `<div data-choice>` → Choice row
+3. Auto-assign canvas positions based on tree depth/breadth (reuse template layout logic)
+4. Upload referenced images to `/uploads/` (fetch remote URLs or accept as multipart)
+5. Create tree + version + steps + choices in one transaction
+
+**Export flow (`GET /api/trees/:id/export-html`):**
+1. Load full tree graph (steps + choices)
+2. BFS/DFS traversal from intro step, building nested HTML structure
+3. Return a self-contained `.html` file with inline styles and embedded images (data URIs) or relative paths
+4. The HTML is readable as a standalone document (linear path through all branches) with semantic headings
+
+**Use cases:**
+- Author a tour in Google Docs or any HTML editor, import into Bosco
+- Export a Bosco tree as a static HTML fallback for accessibility or archiving
+- Version-control tree content as HTML in git
+- Share tree structure with collaborators who don't have Bosco access
+
+### Phase 6 — Theming Polish
 - Font pairing presets
 - WCAG AA contrast checker
 
-### Phase 6 — Scale & Accessibility
+### Phase 7 — Scale & Accessibility
 - Version history UI + rollback
 - Full WCAG AA audit
 - Alt text enforcement at publish validation

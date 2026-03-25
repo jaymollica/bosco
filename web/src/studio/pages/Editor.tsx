@@ -336,6 +336,13 @@ export default function Editor() {
             onUpdateContent={handleUpdateContent}
             onUpdateChoice={handleUpdateChoice}
             onDeleteChoice={handleDeleteChoice}
+            onDeleteStep={async () => {
+              if (!id || !selectedStep) return
+              await deleteStep(id, selectedStep.id)
+              setNodes(nds => nds.filter(n => n.id !== selectedStep.id))
+              setChoices(prev => prev.filter(c => c.from_step_id !== selectedStep.id && c.to_step_id !== selectedStep.id))
+              setSelectedStep(null)
+            }}
             onClose={() => setSelectedStep(null)}
           />
         )}

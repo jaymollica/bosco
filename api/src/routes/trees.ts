@@ -439,7 +439,17 @@ const treeRoutes: FastifyPluginAsync = async (fastify) => {
       label: stepLabel(s),
     }))
 
-    return { title: tree.title, stats, nodes, links, topPaths }
+    // Add synthetic Results node and remap null targets for terminal choices
+    const hasTerminal = links.some((l: { target: string | null }) => !l.target)
+    if (hasTerminal) {
+      nodes.push({ id: '__results__', type: 'end', label: 'Results' })
+    }
+    const mappedLinks = links.map((l: { target: string | null }) => ({
+      ...l,
+      target: l.target ?? '__results__',
+    }))
+
+    return { title: tree.title, stats, nodes, links: mappedLinks, topPaths }
   })
 
   // Update theme

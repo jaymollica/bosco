@@ -87,7 +87,7 @@ export default function Analytics() {
 
             {/* Legend */}
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-              {[['intro', '#6366f1'], ['text', '#64748b'], ['image', '#8b5cf6'], ['end', '#10b981']].map(([type, color]) => (
+              {[['intro', '#6366f1'], ['text', '#64748b'], ['image', '#8b5cf6'], ['results', '#10b981']].map(([type, color]) => (
                 <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.7rem', color: '#888' }}>
                   <div style={{ width: 10, height: 10, borderRadius: 2, background: color as string }} />
                   {type}
@@ -100,7 +100,7 @@ export default function Analytics() {
                 nodes={nodes}
                 links={links}
                 width={chartWidth}
-                height={Math.max(360, nodes.filter(n => n.type === 'end').length * 46)}
+                height={Math.max(360, nodes.length * 36)}
               />
             </div>
           </div>

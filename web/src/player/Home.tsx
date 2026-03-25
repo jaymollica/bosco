@@ -24,11 +24,18 @@ interface PublishedTree {
 function buildFontUrl(trees: PublishedTree[]): string | null {
   const families = new Set<string>()
   for (const t of trees) {
-    if (t.theme?.titleFont?.family) families.add(`${t.theme.titleFont.family}:wght@${t.theme.titleFont.weight || '700'}`)
-    if (t.theme?.bodyFont?.family) families.add(`${t.theme.bodyFont.family}:wght@${t.theme.bodyFont.weight || '400'}`)
+    const addFont = (font?: { family: string; weight: string }) => {
+      if (!font?.family) return
+      const name = font.family.replace(/ /g, '+')
+      const w = font.weight || '400'
+      const weights = w === '400' ? '400' : `400;${w}`
+      families.add(`${name}:wght@${weights}`)
+    }
+    addFont(t.theme?.titleFont)
+    addFont(t.theme?.bodyFont)
   }
   if (families.size === 0) return null
-  return `https://fonts.googleapis.com/css2?${[...families].map(f => `family=${f.replace(/ /g, '+')}`).join('&')}&display=swap`
+  return `https://fonts.googleapis.com/css2?${[...families].map(f => `family=${f}`).join('&')}&display=swap`
 }
 
 function useIsDesktop() {
@@ -178,7 +185,7 @@ export default function Home() {
           const intro = tree.intro_content
           let bg = '#ffffff'
           if (theme.background?.type === 'gradient' && theme.background.css) {
-            bg = theme.background.css
+            bg = theme.background.css.replace(/;\s*$/, '').trim()
           } else if (theme.background?.type === 'solid' && theme.background.color) {
             bg = theme.background.color
           }

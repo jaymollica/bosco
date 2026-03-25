@@ -13,10 +13,11 @@ interface Props {
   onUpdateContent: (content: Record<string, unknown>) => void
   onUpdateChoice: (choiceId: string, data: ChoiceUpdate) => void
   onDeleteChoice: (choiceId: string) => void
+  onDeleteStep: () => void
   onClose: () => void
 }
 
-export default function StepEditor({ step, choices, steps, onUpdateContent, onUpdateChoice, onDeleteChoice, onClose }: Props) {
+export default function StepEditor({ step, choices, steps, onUpdateContent, onUpdateChoice, onDeleteChoice, onDeleteStep, onClose }: Props) {
   const [content, setContent] = useState<Record<string, unknown>>(step.content as unknown as Record<string, unknown>)
   const [uploading, setUploading] = useState(false)
   const [showLibrary, setShowLibrary] = useState(false)
@@ -235,6 +236,15 @@ export default function StepEditor({ step, choices, steps, onUpdateContent, onUp
             {stepChoices.length < 4 && (
               <p style={{ fontSize: '0.75rem', color: '#888' }}>Connect this step to another step on the canvas to add a choice.</p>
             )}
+          </div>
+
+          <div style={{ marginTop: '1.5rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
+            <button
+              onClick={() => { if (confirm('Delete this step and all its choices?')) onDeleteStep() }}
+              style={{ width: '100%', padding: '0.5rem', background: 'none', border: '1px solid #e00', borderRadius: '4px', color: '#e00', fontSize: '0.8rem', cursor: 'pointer' }}
+            >
+              Delete step
+            </button>
           </div>
       </div>
     </div>

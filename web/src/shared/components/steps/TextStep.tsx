@@ -7,12 +7,14 @@ interface Props {
   onChoose: (choiceId: string, toStepId: string | null) => void
   titleFont?: string
   bodyFont?: string
+  textColor?: string
+  themeBackground?: { type?: string; color?: string; css?: string }
 }
 
-export default function TextStep({ choices, onChoose, bodyFont }: Props) {
+export default function TextStep({ choices, onChoose, bodyFont, textColor, themeBackground }: Props) {
   return (
     <div style={{ width: '100%', height: '100%' }}>
-      <ChoiceList choices={choices} onChoose={onChoose} bodyFont={bodyFont} />
+      <ChoiceList choices={choices} onChoose={onChoose} bodyFont={bodyFont} textColor={textColor} themeBackground={themeBackground} />
     </div>
   )
 }
